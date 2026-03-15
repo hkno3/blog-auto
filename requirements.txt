@@ -1,0 +1,15 @@
+flask==3.0.3
+flask-apscheduler==1.13.1
+google-auth==2.29.0
+google-auth-oauthlib==1.2.0
+google-auth-httplib2==0.2.0
+google-api-python-client==2.127.0
+google-genai>=1.0.0
+requests==2.31.0
+beautifulsoup4==4.12.3
+lxml==5.2.1
+python-dotenv==1.0.1
+pytrends==4.9.2
+apscheduler==3.10.4
+cryptography==42.0.7
+Pillow==10.3.0

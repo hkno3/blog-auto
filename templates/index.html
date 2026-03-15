@@ -1,0 +1,285 @@
+{% extends "base.html" %}
+{% block title %}대시보드{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>대시보드</h1>
+  <div class="auth-badge {% if auth.authenticated %}auth-ok{% else %}auth-fail{% endif %}">
+    {% if auth.authenticated %}
+      ✅ {{ auth.blog_name }} 연결됨
+    {% else %}
+      ❌ Blogger 미연결 — <a href="{{ url_for('settings') }}">설정에서 연결</a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- 통계 카드 -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-number">{{ stats.total }}</div>
+    <div class="stat-label">전체 글</div>
+  </div>
+  <div class="stat-card success">
+    <div class="stat-number">{{ stats.published }}</div>
+    <div class="stat-label">발행 완료</div>
+  </div>
+  <div class="stat-card danger">
+    <div class="stat-number">{{ stats.failed }}</div>
+    <div class="stat-label">실패</div>
+  </div>
+</div>
+
+<!-- 실행 패널 -->
+<div class="panel">
+  <h2>글 쓰기 실행</h2>
+
+  <!-- 키워드 입력 + 추천 -->
+  <div class="form-group">
+    <label>직접 키워드 입력 (선택사항)</label>
+    <div class="input-with-btn">
+      <input type="text" id="manual-keyword" placeholder="입력 없이 추천 키워드 선택 가능">
+      <button class="btn-secondary" onclick="loadKeywords()">키워드 추천</button>
+    </div>
+  </div>
+
+  <!-- 번호 키워드 칩 -->
+  <div id="keyword-list" class="keyword-chips" style="display:none;"></div>
+  <div id="selected-info" class="selected-info" style="display:none;">
+    선택된 키워드: <span id="selected-count">0</span>개
+    <span id="selected-labels"></span>
+    <button class="btn-clear" onclick="clearSelection()">선택 초기화</button>
+  </div>
+
+  <!-- 실행 버튼 -->
+  <div class="run-btns">
+    <button class="btn-primary btn-large" onclick="runNow()">
+      ▶ 지금 바로 글쓰기 시작
+    </button>
+    <button class="btn-schedule btn-large" onclick="runEveryInterval()">
+      🕐 <span id="interval-label">60</span>분 마다 글 예약하기
+    </button>
+  </div>
+
+  <!-- 글쓰기 설정 -->
+  <details class="writing-settings" id="writing-settings-panel">
+    <summary>⚙️ 글쓰기 설정</summary>
+    <div class="settings-inner">
+      <div class="form-row">
+        <div class="form-group">
+          <label>발행 간격 (분)</label>
+          <input type="number" id="post_interval_minutes" value="60" min="10"
+                 oninput="document.getElementById('interval-label').textContent=this.value">
+        </div>
+        <div class="form-group">
+          <label>글당 이미지 수</label>
+          <input type="number" id="image_count" value="5" min="1" max="10">
+        </div>
+        <div class="form-group">
+          <label>최소 글 길이 (글자)</label>
+          <input type="number" id="min_content_length" value="800" min="300">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>글쓰기 말투 / 스타일</label>
+        <textarea id="writing_style" rows="2"
+                  placeholder="예: 친근하고 정보성 있는 블로그 말투">친근하고 정보성 있는 블로그 말투</textarea>
+      </div>
+    </div>
+  </details>
+</div>
+
+<!-- 진행 상태 -->
+<div id="progress-box" class="panel" style="display:none;">
+  <h2>진행 상태</h2>
+  <div id="progress-log" class="log-stream"></div>
+</div>
+
+<!-- 최근 글 목록 -->
+<div class="panel">
+  <h2>최근 발행 글</h2>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>키워드</th>
+        <th>제목</th>
+        <th>상태</th>
+        <th>작성일</th>
+      </tr>
+    </thead>
+    <tbody id="posts-tbody">
+      {% for post in posts %}
+      <tr>
+        <td><span class="tag">{{ post.keyword }}</span></td>
+        <td>{{ post.title or '-' }}</td>
+        <td>
+          <span class="status-badge status-{{ post.status }}">
+            {% if post.status == 'published' %}✅ 발행됨
+            {% elif post.status == 'failed' %}❌ 실패
+            {% elif post.status == 'pending' %}⏳ 대기
+            {% else %}{{ post.status }}{% endif %}
+          </span>
+        </td>
+        <td>{{ post.created_at }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="empty">아직 작성된 글이 없습니다.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- 최근 로그 -->
+<div class="panel">
+  <h2>최근 로그 <a href="{{ url_for('logs_page') }}" class="link-small">전체 보기</a></h2>
+  <div class="log-list">
+    {% for log in logs %}
+    <div class="log-item log-{{ log.level|lower }}">
+      <span class="log-time">{{ log.created_at }}</span>
+      <span class="log-level">[{{ log.level }}]</span>
+      <span class="log-msg">{{ log.message }}</span>
+    </div>
+    {% else %}
+    <div class="empty">로그가 없습니다.</div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ─── 키워드 추천 ──────────────────────────────────────
+let selectedKeywords = [];
+
+async function loadKeywords() {
+  showToast('키워드 불러오는 중...');
+  const container = document.getElementById('keyword-list');
+  container.innerHTML = '<span style="color:#64748b;font-size:13px;">RSS 수집 + 서브키워드 조합 중...</span>';
+  container.style.display = 'flex';
+  selectedKeywords = [];
+  updateSelectedInfo();
+
+  const res = await fetch('/api/keywords?source=both');
+  const data = await res.json();
+
+  container.innerHTML = data.keywords.map((kw, i) =>
+    `<span class="chip" onclick="toggleKeyword(this, '${kw.replace(/'/g,"\\'")}')">
+      <span class="chip-num">${i + 1}</span>${kw}
+    </span>`
+  ).join('');
+}
+
+function toggleKeyword(el, kw) {
+  if (el.classList.contains('selected')) {
+    el.classList.remove('selected');
+    selectedKeywords = selectedKeywords.filter(k => k !== kw);
+  } else {
+    el.classList.add('selected');
+    selectedKeywords.push(kw);
+  }
+  updateSelectedInfo();
+}
+
+function updateSelectedInfo() {
+  const info = document.getElementById('selected-info');
+  const countEl = document.getElementById('selected-count');
+  const labelsEl = document.getElementById('selected-labels');
+
+  if (selectedKeywords.length === 0) {
+    info.style.display = 'none';
+  } else {
+    info.style.display = 'flex';
+    countEl.textContent = selectedKeywords.length;
+    labelsEl.innerHTML = selectedKeywords.map((k, i) =>
+      `<span class="sel-tag">${i+1}. ${k}</span>`
+    ).join('');
+  }
+}
+
+function clearSelection() {
+  selectedKeywords = [];
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+  updateSelectedInfo();
+}
+
+function getKeywordsToRun() {
+  // 선택된 칩 있으면 우선, 없으면 직접 입력, 없으면 자동
+  if (selectedKeywords.length > 0) return selectedKeywords;
+  const manual = document.getElementById('manual-keyword').value.trim();
+  return manual ? [manual] : [];
+}
+
+function getWritingSettings() {
+  return {
+    interval_minutes: parseInt(document.getElementById('post_interval_minutes').value) || 60,
+    image_count: parseInt(document.getElementById('image_count').value) || 5,
+    min_content_length: parseInt(document.getElementById('min_content_length').value) || 800,
+    writing_style: document.getElementById('writing_style').value,
+  };
+}
+
+// ─── 즉시 실행 ────────────────────────────────────────
+async function runNow() {
+  const keywords = getKeywordsToRun();
+  const settings = getWritingSettings();
+
+  showProgress();
+  const res = await fetch('/run/now', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ keywords, count: keywords.length || 1, ...settings })
+  });
+  const data = await res.json();
+  showToast(data.message, data.success ? 'success' : 'error');
+  startLogPolling();
+}
+
+// ─── 예약 실행 ────────────────────────────────────────
+async function runEveryInterval() {
+  const keywords = getKeywordsToRun();
+  const settings = getWritingSettings();
+  const count = keywords.length || 1;
+
+  const res = await fetch('/run/scheduled', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      keywords,
+      count,
+      interval_minutes: settings.interval_minutes,
+      ...settings
+    })
+  });
+  const data = await res.json();
+  showToast(data.message, data.success ? 'success' : 'error');
+  showProgress();
+  startLogPolling();
+}
+
+// ─── 진행 로그 ────────────────────────────────────────
+function showProgress() {
+  document.getElementById('progress-box').style.display = 'block';
+  document.getElementById('progress-log').innerHTML = '<div class="log-item">시작 중...</div>';
+}
+
+let pollInterval = null;
+function startLogPolling() {
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(async () => {
+    const res = await fetch('/api/logs');
+    const data = await res.json();
+    const container = document.getElementById('progress-log');
+    const sorted = [...data.logs].reverse();
+    container.innerHTML = sorted.slice(-15).map(l =>
+      `<div class="log-item log-${l.level.toLowerCase()}">
+        <span class="log-time">${l.created_at}</span>
+        <span class="log-level">[${l.level}]</span>
+        <span class="log-msg">${l.message}</span>
+      </div>`
+    ).join('');
+    const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 50;
+    if (isAtBottom) container.scrollTop = container.scrollHeight;
+  }, 2000);
+  setTimeout(() => clearInterval(pollInterval), 300000);
+}
+</script>
+{% endblock %}
