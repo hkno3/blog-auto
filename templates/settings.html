@@ -61,6 +61,54 @@
   </div>
 </div>
 
+<!-- 네이버 API 설정 -->
+<div class="panel">
+  <h2>네이버 API 설정 <span class="hint-inline">(키워드 분석용)</span></h2>
+  <p class="hint">수익형 키워드 분석 기능에 사용됩니다. 네이버 검색광고 및 검색 API 키를 입력하세요.</p>
+
+  <div class="form-group">
+    <label>네이버 검색광고 Customer ID <span class="required">*</span></label>
+    <input type="text" id="naver_ad_customer_id" value="{{ config.naver_ad_customer_id }}"
+           placeholder="예: 4293822">
+  </div>
+
+  <div class="form-group">
+    <label>네이버 검색광고 API License Key <span class="required">*</span></label>
+    <input type="password" id="naver_ad_license" value="{{ config.naver_ad_license }}"
+           placeholder="0100000000...">
+  </div>
+
+  <div class="form-group">
+    <label>네이버 검색광고 Secret Key <span class="required">*</span></label>
+    <input type="password" id="naver_ad_secret" value="{{ config.naver_ad_secret }}"
+           placeholder="AQAAAA...">
+    <small>
+      <a href="https://manage.searchad.naver.com/customers/{{config.naver_ad_customer_id}}/tool/api" target="_blank">
+        👉 네이버 검색광고 API 키 확인
+      </a>
+    </small>
+  </div>
+
+  <div class="form-group">
+    <label>네이버 Client ID <span class="required">*</span></label>
+    <input type="text" id="naver_client_id" value="{{ config.naver_client_id }}"
+           placeholder="네이버 개발자센터 Client ID">
+  </div>
+
+  <div class="form-group">
+    <label>네이버 Client Secret <span class="required">*</span></label>
+    <input type="password" id="naver_client_secret" value="{{ config.naver_client_secret }}"
+           placeholder="네이버 개발자센터 Client Secret">
+    <small>
+      <a href="https://developers.naver.com/apps/" target="_blank">
+        👉 네이버 개발자센터 API 키 확인
+      </a>
+    </small>
+  </div>
+
+  <div id="naver-test-result" class="api-result"></div>
+</div>
+
 <!-- Blogger 연동 -->
 <div class="panel">
   <h2>Blogger 연동</h2>
@@ -164,6 +212,11 @@ async function saveSettings() {
     gemini_key: document.getElementById('gemini_key').value,
     unsplash_key: document.getElementById('unsplash_key').value,
     pexels_key: document.getElementById('pexels_key').value,
+    naver_ad_customer_id: document.getElementById('naver_ad_customer_id').value,
+    naver_ad_license: document.getElementById('naver_ad_license').value,
+    naver_ad_secret: document.getElementById('naver_ad_secret').value,
+    naver_client_id: document.getElementById('naver_client_id').value,
+    naver_client_secret: document.getElementById('naver_client_secret').value,
     blogger_blog_id: document.getElementById('blogger_blog_id').value,
     keyword_source: document.getElementById('keyword_source').value,
     batch_count: parseInt(document.getElementById('batch_count').value),

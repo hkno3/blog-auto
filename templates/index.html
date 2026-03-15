@@ -44,7 +44,7 @@
         <label>키워드 (비우면 자동 선택)</label>
         <div class="input-with-btn">
           <input type="text" id="manual-keyword" placeholder="예: 다이어트 방법">
-          <button class="btn-secondary" onclick="loadKeywords()">키워드 추천</button>
+          <button class="btn-secondary" onclick="loadKeywords()">빠른 추천</button>
         </div>
       </div>
       <div class="form-group">
@@ -53,8 +53,43 @@
       </div>
     </div>
 
-    <!-- 키워드 추천 목록 -->
+    <!-- 수익형 키워드 분석 버튼 -->
+    <div class="analyze-bar">
+      <button class="btn-analyze" onclick="analyzeKeywords('health')">
+        🔍 건강 키워드 분석
+      </button>
+      <button class="btn-analyze" onclick="analyzeKeywords('biz')">
+        💼 비즈 키워드 분석
+      </button>
+      <span class="analyze-hint">네이버 API 검색량/문서량 기반 수익형 키워드 선별</span>
+    </div>
+
+    <!-- 빠른 추천 칩 -->
     <div id="keyword-list" class="keyword-chips" style="display:none;"></div>
+
+    <!-- 키워드 분석 결과 테이블 -->
+    <div id="analyze-result" style="display:none;">
+      <div class="analyze-header">
+        <span id="analyze-title">분석 결과</span>
+        <span id="analyze-loading" style="display:none;">⏳ 분석 중... (30초~1분 소요)</span>
+      </div>
+      <div class="table-scroll">
+        <table class="data-table analyze-table">
+          <thead>
+            <tr>
+              <th>포커스 키워드</th>
+              <th>블로그 제목</th>
+              <th>검색량 / 문서량</th>
+              <th>경쟁 강도</th>
+              <th>예상 단가</th>
+              <th>추천도</th>
+              <th>선택</th>
+            </tr>
+          </thead>
+          <tbody id="analyze-tbody"></tbody>
+        </table>
+      </div>
+    </div>
 
     <button class="btn-primary btn-large" onclick="runNow()">
       ▶ 지금 바로 글쓰기 시작
@@ -156,21 +191,88 @@ function switchTab(tab) {
 }
 
 async function loadKeywords() {
-  const source = 'both';
   showToast('키워드 불러오는 중...');
-  const res = await fetch(`/api/keywords?source=${source}`);
+  const res = await fetch('/api/keywords?source=both');
   const data = await res.json();
   const container = document.getElementById('keyword-list');
   container.innerHTML = data.keywords.map(kw =>
     `<span class="chip" onclick="selectKeyword(this)">${kw}</span>`
   ).join('');
   container.style.display = 'flex';
+  document.getElementById('analyze-result').style.display = 'none';
 }
 
 function selectKeyword(el) {
   document.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
   el.classList.add('selected');
   document.getElementById('manual-keyword').value = el.textContent;
+}
+
+async function analyzeKeywords(mode) {
+  const resultBox = document.getElementById('analyze-result');
+  const loading = document.getElementById('analyze-loading');
+  const title = document.getElementById('analyze-title');
+  const tbody = document.getElementById('analyze-tbody');
+
+  resultBox.style.display = 'block';
+  document.getElementById('keyword-list').style.display = 'none';
+  loading.style.display = 'inline';
+  title.textContent = mode === 'health' ? '건강 키워드 분석 결과' : '비즈 키워드 분석 결과';
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;">분석 중... RSS 수집 → 네이버 검색량 → 경쟁도 계산</td></tr>';
+
+  try {
+    const res = await fetch(`/api/keywords/analyze?mode=${mode}`);
+    const data = await res.json();
+    loading.style.display = 'none';
+
+    if (!data.success) {
+      tbody.innerHTML = `<tr><td colspan="7" class="empty">분석 실패: ${data.error}</td></tr>`;
+      return;
+    }
+
+    if (data.results.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="empty">조건에 맞는 키워드가 없습니다. 잠시 후 다시 시도해주세요.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = data.results.map(r => `
+      <tr>
+        <td>
+          <strong>${r.keyword}</strong>
+          <div class="kw-source">${r.source} ← ${r.original}</div>
+        </td>
+        <td class="title-cell">${r.title}</td>
+        <td>
+          <div>검색: <strong>${r.search_total.toLocaleString()}</strong></div>
+          <div class="doc-count">문서: ${r.doc_count.toLocaleString()}</div>
+          <div class="ratio">비율: ${r.competition_ratio}</div>
+        </td>
+        <td>
+          <span class="comp-badge comp-${r.competition_level.replace(' ', '-')}">
+            ${r.competition_level}
+          </span>
+        </td>
+        <td class="cpc-cell">${r.cpc_estimate}</td>
+        <td>
+          <span class="score-stars">${'⭐'.repeat(r.recommendation)}</span>
+        </td>
+        <td>
+          <button class="btn-select-kw" onclick="selectAnalyzedKeyword('${r.keyword}', '${r.title.replace(/'/g, "\\'")}')">
+            선택
+          </button>
+        </td>
+      </tr>
+    `).join('');
+
+  } catch (e) {
+    loading.style.display = 'none';
+    tbody.innerHTML = `<tr><td colspan="7" class="empty">오류: ${e.message}</td></tr>`;
+  }
+}
+
+function selectAnalyzedKeyword(keyword, title) {
+  document.getElementById('manual-keyword').value = keyword;
+  showToast(`키워드 선택: ${keyword}`, 'success');
 }
 
 async function runNow() {

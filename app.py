@@ -9,6 +9,7 @@ from database.db import init_db, get_posts, get_logs, add_log
 from modules.keyword_fetcher import get_fresh_keywords
 from modules.blogger_uploader import check_auth_status
 from modules.scheduler import run_single_post, run_batch
+from modules.keyword_analyzer import analyze_keywords
 
 app = Flask(__name__)
 app.secret_key = "blog-auto-secret-2024"
@@ -68,13 +69,26 @@ def run_scheduled():
     return jsonify({"success": True, "message": f"{count}개 예약 글쓰기를 설정했습니다."})
 
 
-# ─── 키워드 미리보기 ───────────────────────────────────
+# ─── 키워드 미리보기 (기본) ────────────────────────────
 
 @app.route("/api/keywords")
 def api_keywords():
     source = request.args.get("source", "google")
     keywords = get_fresh_keywords(count=10, source=source)
     return jsonify({"keywords": keywords})
+
+
+# ─── 수익형 키워드 분석 ────────────────────────────────
+
+@app.route("/api/keywords/analyze")
+def api_keywords_analyze():
+    mode = request.args.get("mode", "health")  # health | biz
+    try:
+        results = analyze_keywords(mode=mode, top_n=5)
+        return jsonify({"success": True, "results": results})
+    except Exception as e:
+        add_log(f"키워드 분석 오류: {e}", "ERROR")
+        return jsonify({"success": False, "error": str(e)})
 
 
 # ─── 설정 ──────────────────────────────────────────────
@@ -85,6 +99,11 @@ def settings():
         "gemini_key": "****" if get_api_key("gemini") else "",
         "unsplash_key": "****" if get_api_key("unsplash") else "",
         "pexels_key": "****" if get_api_key("pexels") else "",
+        "naver_ad_customer_id": get_api_key("naver_ad_customer_id") or "",
+        "naver_ad_license": "****" if get_api_key("naver_ad_license") else "",
+        "naver_ad_secret": "****" if get_api_key("naver_ad_secret") else "",
+        "naver_client_id": get_api_key("naver_client_id") or "",
+        "naver_client_secret": "****" if get_api_key("naver_client_secret") else "",
         "blogger_blog_id": get_setting("blogger_blog_id") or "",
         "keyword_source": get_setting("keyword_source") or "google",
         "batch_count": get_setting("batch_count") or 3,
@@ -106,6 +125,11 @@ def settings_save():
         "gemini": data.get("gemini_key", ""),
         "unsplash": data.get("unsplash_key", ""),
         "pexels": data.get("pexels_key", ""),
+        "naver_ad_customer_id": data.get("naver_ad_customer_id", ""),
+        "naver_ad_license": data.get("naver_ad_license", ""),
+        "naver_ad_secret": data.get("naver_ad_secret", ""),
+        "naver_client_id": data.get("naver_client_id", ""),
+        "naver_client_secret": data.get("naver_client_secret", ""),
     }
     for name, value in api_keys.items():
         if value and value != "****":

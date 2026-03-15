@@ -270,6 +270,57 @@ small { color: var(--text-muted); font-size: 12px; display: block; margin-top: 4
 .api-result { font-size: 13px; margin-top: 8px; min-height: 20px; }
 .test-ok   { color: var(--success); }
 .test-fail { color: var(--danger); }
+.hint-inline { font-size: 12px; font-weight: 400; color: var(--text-muted); margin-left: 6px; }
+
+/* ─── 키워드 분석 ────────────────────────────────────── */
+.analyze-bar {
+  display: flex; align-items: center; gap: 10px;
+  margin: 12px 0; flex-wrap: wrap;
+}
+.btn-analyze {
+  background: #eff6ff; color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  padding: 8px 16px; border-radius: 6px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-analyze:hover { background: #dbeafe; }
+.analyze-hint { font-size: 12px; color: var(--text-muted); }
+
+.analyze-header {
+  display: flex; align-items: center; gap: 12px;
+  font-weight: 600; font-size: 14px;
+  margin: 12px 0 8px;
+}
+.table-scroll { overflow-x: auto; }
+.analyze-table { min-width: 800px; }
+.analyze-table th { font-size: 11px; white-space: nowrap; }
+
+.kw-source { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.doc-count { font-size: 11px; color: var(--text-muted); }
+.ratio { font-size: 11px; color: #6366f1; }
+.title-cell { font-size: 12px; max-width: 200px; line-height: 1.5; }
+.cpc-cell { font-size: 12px; color: var(--success); white-space: nowrap; }
+.score-stars { font-size: 13px; }
+
+.comp-badge {
+  font-size: 11px; padding: 2px 8px;
+  border-radius: 4px; white-space: nowrap;
+  font-weight: 600;
+}
+.comp-매우-낮음 { background: #dcfce7; color: #15803d; }
+.comp-낮음     { background: #d1fae5; color: #065f46; }
+.comp-보통     { background: #fef9c3; color: #a16207; }
+.comp-높음     { background: #fee2e2; color: #b91c1c; }
+.comp-매우-높음 { background: #fecaca; color: #991b1b; }
+
+.btn-select-kw {
+  background: var(--primary); color: white;
+  border: none; padding: 4px 10px;
+  border-radius: 4px; font-size: 12px;
+  cursor: pointer;
+}
+.btn-select-kw:hover { background: var(--primary-hover); }
 
 /* ─── 알림 ───────────────────────────────────────────── */
 .alert {
