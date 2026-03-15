@@ -142,7 +142,7 @@ def test_api():
             key = get_api_key("gemini")
             if key:
                 genai.configure(api_key=key)
-                model = genai.GenerativeModel("gemini-1.5-flash")
+                model = genai.GenerativeModel("gemini-2.0-flash")
                 model.generate_content("테스트", generation_config={"max_output_tokens": 10})
                 results["gemini"] = {"ok": True, "msg": "연결 성공"}
             else:
