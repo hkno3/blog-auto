@@ -64,13 +64,24 @@ def _load_cache(site: str) -> list[dict]:
 
 # ─── 파싱 ──────────────────────────────────────────────
 
+def _parse_xml(content: bytes):
+    """BeautifulSoup XML 파싱 - 여러 파서 순차 시도"""
+    for parser in ["lxml-xml", "xml", "lxml", "html.parser"]:
+        try:
+            return BeautifulSoup(content, parser)
+        except Exception:
+            continue
+    return BeautifulSoup(content, "html.parser")
+
+
 def _parse_sitemap_index(sitemap_url: str) -> list[str]:
     """sitemap_index.xml에서 하위 sitemap URL 추출"""
     try:
         resp = requests.get(sitemap_url, headers=HEADERS, timeout=15)
         resp.raise_for_status()
-        soup = BeautifulSoup(resp.content, "lxml-xml")
-        locs = [loc.text.strip() for loc in soup.find_all("loc")]
+        soup = _parse_xml(resp.content)
+        locs = [loc.get_text().strip() for loc in soup.find_all("loc") if loc.get_text().strip()]
+        add_log(f"sitemap_index 파싱: {len(locs)}개 하위 sitemap ({sitemap_url})")
         return locs
     except Exception as e:
         add_log(f"sitemap_index 파싱 실패 ({sitemap_url}): {e}", "ERROR")
@@ -82,17 +93,26 @@ def _parse_sitemap(sitemap_url: str) -> list[dict]:
     try:
         resp = requests.get(sitemap_url, headers=HEADERS, timeout=15)
         resp.raise_for_status()
-        soup = BeautifulSoup(resp.content, "lxml-xml")
+        soup = _parse_xml(resp.content)
         entries = []
         for url_tag in soup.find_all("url"):
             loc = url_tag.find("loc")
-            title_tag = url_tag.find("news:title") or url_tag.find("title")
-            if loc:
-                entries.append({
-                    "url": loc.text.strip(),
-                    "title": title_tag.text.strip() if title_tag else "",
-                    "description": "",
-                })
+            if not loc:
+                continue
+            url = loc.get_text().strip()
+            if not url:
+                continue
+            # title 여러 태그명 시도
+            title_tag = (url_tag.find("news:title") or url_tag.find("title")
+                         or url_tag.find("image:title"))
+            title = title_tag.get_text().strip() if title_tag else ""
+
+            # title 없으면 URL에서 slug 추출
+            if not title:
+                slug = url.rstrip("/").split("/")[-1]
+                title = slug.replace("-", " ").replace("_", " ").strip()
+
+            entries.append({"url": url, "title": title, "description": ""})
         return entries
     except Exception as e:
         add_log(f"sitemap 파싱 실패 ({sitemap_url}): {e}", "WARN")
@@ -293,19 +313,30 @@ def _build_related_section(links: list[dict]) -> str:
 def _crawl_latest_from_each_site(count: int = 3) -> list[dict]:
     """각 사이트 sitemap에서 최신 글 직접 크롤링"""
     results = []
-    per_site = max(1, count // len(TARGET_SITES))
+    per_site = max(1, count)
 
     for site_info in TARGET_SITES:
         try:
             sub_sitemaps = _parse_sitemap_index(site_info["sitemap"])
             if not sub_sitemaps:
+                add_log(f"하위 sitemap 없음: {site_info['name']}", "WARN")
                 continue
-            # 첫 번째 하위 sitemap에서 글 가져오기
-            entries = _parse_sitemap(sub_sitemaps[0])
-            for e in entries[:per_site]:
-                if e.get("url") and e.get("title"):
-                    results.append({**e, "site": site_info["name"]})
+
+            # 여러 하위 sitemap 시도
+            for sub_url in sub_sitemaps[:3]:
+                entries = _parse_sitemap(sub_url)
+                found = 0
+                for e in entries:
+                    if e.get("url") and e.get("title"):
+                        results.append({**e, "site": site_info["name"]})
+                        found += 1
+                    if found >= per_site:
+                        break
+                if found > 0:
+                    break  # 글 찾았으면 다음 사이트로
+
         except Exception as ex:
             add_log(f"직접 크롤링 실패 ({site_info['name']}): {ex}", "WARN")
 
+    add_log(f"직접 크롤링 결과: {len(results)}개")
     return results[:count]
