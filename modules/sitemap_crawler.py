@@ -8,6 +8,7 @@ import re
 import sqlite3
 import requests
 from datetime import datetime, timedelta
+from urllib.parse import unquote
 from bs4 import BeautifulSoup
 from database.db import get_conn, add_log
 
@@ -107,10 +108,15 @@ def _parse_sitemap(sitemap_url: str) -> list[dict]:
                          or url_tag.find("image:title"))
             title = title_tag.get_text().strip() if title_tag else ""
 
-            # title 없으면 URL에서 slug 추출
+            # title 없으면 URL에서 slug 추출 + URL 디코딩
             if not title:
                 slug = url.rstrip("/").split("/")[-1]
+                slug = unquote(slug)  # %eb%b3%b8... → 한글 변환
                 title = slug.replace("-", " ").replace("_", " ").strip()
+
+            # 제목이 도메인명이거나 너무 짧으면 스킵
+            if not title or len(title) < 4 or title in ("bodyandwell.com", "bizachieve.com"):
+                continue
 
             entries.append({"url": url, "title": title, "description": ""})
         return entries
@@ -178,7 +184,7 @@ def insert_external_links(content: str, keyword: str = "") -> str:
     1) 본문 각 문단에 유사 외부 링크 삽입 (있을 때)
     2) 글 끝에 '함께 보면 좋은 글' 섹션 무조건 추가 (3개)
     """
-    refresh_sitemap_cache()
+    refresh_sitemap_cache(force=True)  # 캐시 강제 갱신 (깨진 제목 재수집)
 
     soup = BeautifulSoup(content, "html.parser")
 
