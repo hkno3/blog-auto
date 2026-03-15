@@ -3,17 +3,16 @@ AI 글쓰기 모듈 - Gemini API (무료 티어)
 SEO 최적화 구조로 글 생성
 """
 import re
-import google.generativeai as genai
+from google import genai
 from config import get_api_key, get_setting
 from database.db import add_log
 
 
-def _get_model():
+def _get_client():
     api_key = get_api_key("gemini")
     if not api_key:
         raise ValueError("Gemini API 키가 설정되지 않았습니다.")
-    genai.configure(api_key=api_key)
-    return genai.GenerativeModel("gemini-2.5-flash")  # 무료 티어
+    return genai.Client(api_key=api_key)
 
 
 def _build_prompt(keyword: str, style: str = "") -> str:
@@ -58,9 +57,11 @@ def generate_post(keyword: str, style: str = "") -> dict:
     """
     add_log(f"AI 글쓰기 시작: {keyword}")
     try:
-        model = _get_model()
+        client = _get_client()
         prompt = _build_prompt(keyword, style)
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model="gemini-2.5-flash", contents=prompt
+        )
         text = response.text
 
         result = _parse_response(text, keyword)

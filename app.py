@@ -162,12 +162,14 @@ def test_api():
 
     if api_name in ("gemini", "all"):
         try:
-            import google.generativeai as genai
+            from google import genai
             key = get_api_key("gemini")
             if key:
-                genai.configure(api_key=key)
-                model = genai.GenerativeModel("gemini-2.5-flash")
-                model.generate_content("테스트", generation_config={"max_output_tokens": 10})
+                client = genai.Client(api_key=key)
+                client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents="테스트",
+                )
                 results["gemini"] = {"ok": True, "msg": "연결 성공"}
             else:
                 results["gemini"] = {"ok": False, "msg": "API 키 없음"}
