@@ -1,14 +1,33 @@
 """
 자동 글쓰기 & 예약 업로드 스케줄러
 """
+import re
 import time
 from datetime import datetime, timedelta
-from database.db import add_log, mark_keyword_used, add_post, update_post_status
+from database.db import add_log, mark_keyword_used, add_post, update_post_status, is_keyword_used, get_published_titles
 from modules.keyword_fetcher import get_fresh_keywords
 from modules.ai_writer import generate_post
 from modules.image_fetcher import get_images, embed_images_in_content
 from modules.sitemap_crawler import insert_external_links
 from modules.blogger_uploader import publish_post
+
+
+def _title_similarity(t1: str, t2: str) -> float:
+    """제목 키워드 겹침 유사도 (0~1)"""
+    w1 = set(re.findall(r"[가-힣a-zA-Z]{2,}", t1.lower()))
+    w2 = set(re.findall(r"[가-힣a-zA-Z]{2,}", t2.lower()))
+    if not w1 or not w2:
+        return 0.0
+    return len(w1 & w2) / max(len(w1), len(w2))
+
+
+def _is_title_duplicate(new_title: str, threshold: float = 0.7) -> tuple:
+    """기존 발행 제목과 유사도 체크 - (중복여부, 유사제목)"""
+    existing = get_published_titles(days=90)
+    for title in existing:
+        if _title_similarity(new_title, title) >= threshold:
+            return True, title
+    return False, ""
 
 
 def run_single_post(
@@ -29,11 +48,22 @@ def run_single_post(
                 return {"success": False, "error": "사용 가능한 키워드 없음"}
             keyword = keywords[0]
 
+        # [방법 1+3] 키워드 중복 체크 (자동/수동 공통)
+        if is_keyword_used(keyword, days=30):
+            add_log(f"중복 키워드 스킵 (30일 이내 사용됨): {keyword}", "WARN")
+            return {"success": False, "error": f"중복 키워드: {keyword} (30일 이내 사용됨)"}
+
         add_log(f"=== 글쓰기 파이프라인 시작: {keyword} ===")
 
         # 2. AI 글쓰기
         style = settings.get("writing_style", "")
         post_data = generate_post(keyword, style=style)
+
+        # [방법 2] 제목 유사도 중복 체크
+        is_dup, similar_title = _is_title_duplicate(post_data["title"])
+        if is_dup:
+            add_log(f"유사 제목 중복 스킵: '{post_data['title']}' ≈ '{similar_title}'", "WARN")
+            return {"success": False, "error": f"유사 제목 존재: {similar_title}"}
         post_id = add_post(keyword, post_data["title"], scheduled_at)
 
         # 3. 이미지 삽입

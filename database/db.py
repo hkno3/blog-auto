@@ -129,6 +129,20 @@ def update_post_status(post_id: int, status: str, blogger_post_id: str = None, e
     conn.close()
 
 
+def get_published_titles(days: int = 90) -> list[str]:
+    """최근 N일 발행된 글 제목 목록"""
+    conn = get_conn()
+    rows = conn.execute(
+        """SELECT title FROM posts
+           WHERE status='published' AND title IS NOT NULL
+           AND created_at > datetime('now', ?, 'localtime')
+           ORDER BY created_at DESC""",
+        (f"-{days} days",)
+    ).fetchall()
+    conn.close()
+    return [r["title"] for r in rows]
+
+
 def get_posts(limit: int = 50):
     conn = get_conn()
     rows = conn.execute(
