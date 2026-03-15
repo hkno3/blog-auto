@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}로그{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>실행 로그</h1>
+  <button class="btn-secondary" onclick="location.reload()">🔄 새로고침</button>
+</div>
+
+<div class="panel">
+  <div class="log-filter">
+    <button class="filter-btn active" onclick="filterLog('all', this)">전체</button>
+    <button class="filter-btn" onclick="filterLog('info', this)">INFO</button>
+    <button class="filter-btn" onclick="filterLog('warn', this)">WARN</button>
+    <button class="filter-btn" onclick="filterLog('error', this)">ERROR</button>
+  </div>
+
+  <div class="log-list" id="log-list">
+    {% for log in logs %}
+    <div class="log-item log-{{ log.level|lower }}" data-level="{{ log.level|lower }}">
+      <span class="log-time">{{ log.created_at }}</span>
+      <span class="log-level">[{{ log.level }}]</span>
+      <span class="log-msg">{{ log.message }}</span>
+    </div>
+    {% else %}
+    <div class="empty">로그가 없습니다.</div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterLog(level, btn) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.log-item').forEach(item => {
+    if (level === 'all' || item.dataset.level === level) {
+      item.style.display = 'flex';
+    } else {
+      item.style.display = 'none';
+    }
+  });
+}
+</script>
+{% endblock %}

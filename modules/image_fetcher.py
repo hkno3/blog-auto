@@ -1,0 +1,122 @@
+"""
+이미지 검색 모듈
+- Unsplash API (무료)
+- Pexels API (무료) - Unsplash 한도 초과 시 자동 전환
+"""
+import requests
+from config import get_api_key
+from database.db import add_log
+
+
+UNSPLASH_API = "https://api.unsplash.com/search/photos"
+PEXELS_API = "https://api.pexels.com/v1/search"
+
+
+def _fetch_unsplash(query: str, count: int = 5) -> list[dict]:
+    api_key = get_api_key("unsplash")
+    if not api_key:
+        return []
+    try:
+        resp = requests.get(
+            UNSPLASH_API,
+            params={"query": query, "per_page": count, "orientation": "landscape"},
+            headers={"Authorization": f"Client-ID {api_key}"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        images = []
+        for item in data.get("results", []):
+            images.append({
+                "url": item["urls"]["regular"],
+                "thumb": item["urls"]["small"],
+                "alt": item.get("alt_description") or query,
+                "source": "Unsplash",
+                "photographer": item["user"]["name"],
+                "photographer_url": item["user"]["links"]["html"],
+            })
+        return images
+    except Exception as e:
+        add_log(f"Unsplash 이미지 검색 실패: {e}", "WARN")
+        return []
+
+
+def _fetch_pexels(query: str, count: int = 5) -> list[dict]:
+    api_key = get_api_key("pexels")
+    if not api_key:
+        return []
+    try:
+        resp = requests.get(
+            PEXELS_API,
+            params={"query": query, "per_page": count, "orientation": "landscape"},
+            headers={"Authorization": api_key},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        images = []
+        for item in data.get("photos", []):
+            images.append({
+                "url": item["src"]["large"],
+                "thumb": item["src"]["medium"],
+                "alt": item.get("alt") or query,
+                "source": "Pexels",
+                "photographer": item["photographer"],
+                "photographer_url": item["photographer_url"],
+            })
+        return images
+    except Exception as e:
+        add_log(f"Pexels 이미지 검색 실패: {e}", "WARN")
+        return []
+
+
+def get_images(keyword: str, count: int = 5) -> list[dict]:
+    """
+    키워드로 이미지 검색 (Unsplash 우선, 부족하면 Pexels 보완)
+    """
+    images = _fetch_unsplash(keyword, count)
+    add_log(f"Unsplash에서 {len(images)}개 이미지 수집")
+
+    if len(images) < count:
+        needed = count - len(images)
+        pexels_images = _fetch_pexels(keyword, needed)
+        images += pexels_images
+        add_log(f"Pexels에서 {len(pexels_images)}개 이미지 추가")
+
+    if not images:
+        add_log(f"이미지 없음 - API 키 확인 필요 ({keyword})", "WARN")
+
+    return images[:count]
+
+
+def embed_images_in_content(content: str, images: list[dict]) -> str:
+    """
+    HTML 본문에 이미지를 균등하게 삽입
+    H2 태그 뒤에 이미지 삽입
+    """
+    if not images:
+        return content
+
+    import re
+    h2_pattern = re.compile(r"(<h2[^>]*>.*?</h2>)", re.IGNORECASE | re.DOTALL)
+    parts = h2_pattern.split(content)
+
+    img_index = 0
+    result_parts = []
+    for part in parts:
+        result_parts.append(part)
+        if h2_pattern.match(part) and img_index < len(images):
+            img = images[img_index]
+            img_html = (
+                f'<figure style="text-align:center;margin:20px 0;">'
+                f'<img src="{img["url"]}" alt="{img["alt"]}" '
+                f'style="max-width:100%;height:auto;border-radius:8px;" loading="lazy"/>'
+                f'<figcaption style="font-size:0.85em;color:#666;">'
+                f'Photo by <a href="{img["photographer_url"]}" target="_blank">'
+                f'{img["photographer"]}</a> on {img["source"]}'
+                f'</figcaption></figure>\n'
+            )
+            result_parts.append(img_html)
+            img_index += 1
+
+    return "".join(result_parts)

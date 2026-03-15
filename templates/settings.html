@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}설정{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>설정</h1>
+</div>
+
+{% if request.args.get('auth') == 'success' %}
+<div class="alert alert-success">✅ Blogger 인증이 완료되었습니다!</div>
+{% elif request.args.get('auth') == 'error' %}
+<div class="alert alert-error">❌ 인증 실패: {{ request.args.get('msg', '') }}</div>
+{% endif %}
+
+<!-- API 키 설정 -->
+<div class="panel">
+  <h2>API 키 설정</h2>
+  <p class="hint">API 키는 암호화되어 로컬에 저장됩니다.</p>
+
+  <div class="form-group">
+    <label>Gemini API Key <span class="required">*필수</span></label>
+    <div class="input-with-btn">
+      <input type="password" id="gemini_key" value="{{ config.gemini_key }}"
+             placeholder="AIza...">
+      <button class="btn-secondary" onclick="testApi('gemini')">연결 테스트</button>
+    </div>
+    <div id="gemini-result" class="api-result"></div>
+    <small>
+      <a href="https://aistudio.google.com/app/apikey" target="_blank">
+        👉 Gemini API 키 발급 (무료)
+      </a>
+    </small>
+  </div>
+
+  <div class="form-group">
+    <label>Unsplash Access Key <span class="optional">선택</span></label>
+    <div class="input-with-btn">
+      <input type="password" id="unsplash_key" value="{{ config.unsplash_key }}"
+             placeholder="Unsplash API Key">
+      <button class="btn-secondary" onclick="testApi('unsplash')">연결 테스트</button>
+    </div>
+    <div id="unsplash-result" class="api-result"></div>
+    <small>
+      <a href="https://unsplash.com/developers" target="_blank">
+        👉 Unsplash API 키 발급 (무료)
+      </a>
+    </small>
+  </div>
+
+  <div class="form-group">
+    <label>Pexels API Key <span class="optional">선택</span></label>
+    <div class="input-with-btn">
+      <input type="password" id="pexels_key" value="{{ config.pexels_key }}"
+             placeholder="Pexels API Key">
+    </div>
+    <small>
+      <a href="https://www.pexels.com/api/" target="_blank">
+        👉 Pexels API 키 발급 (무료)
+      </a>
+    </small>
+  </div>
+</div>
+
+<!-- Blogger 연동 -->
+<div class="panel">
+  <h2>Blogger 연동</h2>
+
+  <div class="auth-status-box {% if auth.authenticated %}auth-ok{% else %}auth-fail{% endif %}">
+    {% if auth.authenticated %}
+      <strong>✅ 연결됨</strong> — {{ auth.blog_name }}
+      <a href="{{ auth.blog_url }}" target="_blank">(블로그 열기)</a>
+    {% else %}
+      <strong>❌ 미연결</strong> — 아래 단계를 따라 설정하세요
+    {% endif %}
+  </div>
+
+  <div class="form-group">
+    <label>Blog ID (선택 - 비우면 자동 감지)</label>
+    <input type="text" id="blogger_blog_id" value="{{ config.blogger_blog_id }}"
+           placeholder="예: 1234567890123456789">
+  </div>
+
+  <div class="setup-steps">
+    <h3>Blogger 연결 방법</h3>
+    <ol>
+      <li>
+        <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a>
+        에서 프로젝트 생성
+      </li>
+      <li>Blogger API v3 활성화</li>
+      <li>OAuth 2.0 클라이언트 ID 생성 (데스크톱 앱 유형)</li>
+      <li>credentials.json 다운로드 후 이 프로그램 폴더에 저장</li>
+      <li>
+        <a href="{{ url_for('auth_blogger') }}" class="btn-secondary btn-inline">
+          🔗 Google 계정으로 인증하기
+        </a>
+      </li>
+    </ol>
+  </div>
+</div>
+
+<!-- 글쓰기 설정 -->
+<div class="panel">
+  <h2>글쓰기 설정</h2>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label>키워드 소스</label>
+      <select id="keyword_source">
+        <option value="google" {% if config.keyword_source == 'google' %}selected{% endif %}>
+          Google Trends
+        </option>
+        <option value="naver" {% if config.keyword_source == 'naver' %}selected{% endif %}>
+          네이버 뉴스
+        </option>
+        <option value="both" {% if config.keyword_source == 'both' %}selected{% endif %}>
+          둘 다 사용
+        </option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>기본 글 갯수</label>
+      <input type="number" id="batch_count" value="{{ config.batch_count }}" min="1" max="20">
+    </div>
+
+    <div class="form-group">
+      <label>글 간격 (분)</label>
+      <input type="number" id="post_interval_minutes" value="{{ config.post_interval_minutes }}" min="10">
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label>글당 이미지 수</label>
+      <input type="number" id="image_count" value="{{ config.image_count }}" min="1" max="10">
+    </div>
+
+    <div class="form-group">
+      <label>최소 글 길이 (글자)</label>
+      <input type="number" id="min_content_length" value="{{ config.min_content_length }}" min="300">
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label>글쓰기 말투 / 스타일</label>
+    <textarea id="writing_style" rows="3"
+              placeholder="예: 친근하고 정보성 있는 블로그 말투로, 독자가 쉽게 이해할 수 있게 작성">{{ config.writing_style }}</textarea>
+  </div>
+</div>
+
+<div class="action-bar">
+  <button class="btn-primary btn-large" onclick="saveSettings()">💾 설정 저장</button>
+  <button class="btn-secondary" onclick="testApi('all')">🔍 전체 연결 테스트</button>
+</div>
+<div id="all-results" class="api-result"></div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function saveSettings() {
+  const data = {
+    gemini_key: document.getElementById('gemini_key').value,
+    unsplash_key: document.getElementById('unsplash_key').value,
+    pexels_key: document.getElementById('pexels_key').value,
+    blogger_blog_id: document.getElementById('blogger_blog_id').value,
+    keyword_source: document.getElementById('keyword_source').value,
+    batch_count: parseInt(document.getElementById('batch_count').value),
+    post_interval_minutes: parseInt(document.getElementById('post_interval_minutes').value),
+    image_count: parseInt(document.getElementById('image_count').value),
+    min_content_length: parseInt(document.getElementById('min_content_length').value),
+    writing_style: document.getElementById('writing_style').value,
+  };
+
+  const res = await fetch('/settings/save', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(data)
+  });
+  const result = await res.json();
+  showToast(result.success ? '설정이 저장되었습니다.' : '저장 실패', result.success ? 'success' : 'error');
+}
+
+async function testApi(name) {
+  const resultId = name === 'all' ? 'all-results' : `${name}-result`;
+  const el = document.getElementById(resultId);
+  el.innerHTML = '테스트 중...';
+
+  const res = await fetch('/settings/test-api', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({api: name})
+  });
+  const data = await res.json();
+
+  el.innerHTML = Object.entries(data).map(([k, v]) =>
+    `<span class="${v.ok ? 'test-ok' : 'test-fail'}">
+      ${v.ok ? '✅' : '❌'} ${k}: ${v.msg}
+    </span>`
+  ).join('<br>');
+}
+</script>
+{% endblock %}
