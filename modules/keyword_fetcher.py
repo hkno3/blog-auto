@@ -1,125 +1,150 @@
 """
-실시간 이슈 키워드 수집 모듈
-- Google Trends RSS (무료)
-- 네이버 뉴스 RSS (무료)
-- 수동 키워드 폴백
+키워드 수집 모듈
+- 전체 RSS 피드에서 최신 키워드 추출
+- 네이버 자동완성으로 서브 키워드 확장
 """
+import re
 import requests
 import xml.etree.ElementTree as ET
 from database.db import add_log, is_keyword_used
 
-HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
-# Google Trends RSS (여러 URL 시도)
-GOOGLE_TRENDS_URLS = [
-    "https://trends.google.com/trends/trendingsearches/daily/rss?geo=KR",
-    "https://trends.google.co.kr/trends/trendingsearches/daily/rss?geo=KR",
+ALL_RSS_FEEDS = [
+    "https://www.korea.kr/rss/policy.xml",
+    "https://www.korea.kr/rss/reporter.xml",
+    "https://www.korea.kr/rss/column.xml",
+    "https://www.korea.kr/rss/insight.xml",
+    "https://www.korea.kr/rss/media.xml",
+    "https://www.korea.kr/rss/shorts.xml",
+    "https://www.korea.kr/rss/visual.xml",
+    "https://www.korea.kr/rss/photo.xml",
+    "https://www.korea.kr/rss/cartoon.xml",
+    "https://www.korea.kr/rss/pressrelease.xml",
+    "https://www.korea.kr/rss/fact.xml",
+    "https://www.korea.kr/rss/ebriefing.xml",
+    "https://www.korea.kr/rss/president.xml",
+    "https://www.korea.kr/rss/cabinet.xml",
+    "https://www.korea.kr/rss/speech.xml",
+    "https://www.korea.kr/rss/expdoc.xml",
+    "https://www.korea.kr/rss/archive.xml",
+    "https://health.chosun.com/rss/healthcaren.xml",
+    "https://health.chosun.com/rss/column.xml",
+    "https://health.chosun.com/site/data/rss/rss.xml",
+    "https://www.foodnews.co.kr/rss/S1N1.xml",
+    "https://www.psychiatricnews.net/rss/allArticle.xml",
+    "https://kormedi.com/category/healthnews/feed/",
+    "https://kormedi.com/category/healthnews/diet/feed/",
+    "https://kormedi.com/category/healthnews/food/feed/",
+    "https://kormedi.com/category/healthnews/exercise/feed/",
+    "https://kormedi.com/category/life/feed/",
+    "https://kormedi.com/category/bionews/feed/",
+    "https://kormedi.com/category/medical/feed/",
+    "https://kormedi.com/category/opinion/feed/",
+    "https://kormedi.com/category/cardnews/feed/",
+    "https://kormedi.com/category/movie/feed/",
+    "https://www.mkhealth.co.kr/rss/allArticle.xml",
 ]
 
-# 네이버 뉴스 RSS 섹션별
-NAVER_RSS_URLS = [
-    "https://feeds.feedburner.com/navernews/ZdXb",  # 연예
-    "https://news.naver.com/main/rss/section.naver?sid1=101",  # 경제
-    "https://news.naver.com/main/rss/section.naver?sid1=102",  # 사회
-    "https://news.naver.com/main/rss/section.naver?sid1=105",  # IT
-    "https://news.naver.com/main/rss/section.naver?sid1=103",  # 생활/문화
-]
-
-# 폴백 키워드 (API 실패 시)
 FALLBACK_KEYWORDS = [
     "다이어트 방법", "건강 식단", "운동 루틴", "피부 관리", "탈모 예방",
-    "재테크 방법", "주식 투자 초보", "부업 방법", "유튜브 수익화", "블로그 수익",
-    "영어 공부법", "자격증 추천", "이직 준비", "면접 질문", "자소서 작성법",
-    "여행 추천", "국내 여행지", "캠핑 장비", "맛집 추천", "홈카페 레시피",
-    "육아 꿀팁", "아기 이유식", "임신 초기 증상", "출산 준비물", "어린이집 준비",
+    "재테크 방법", "주식 투자 초보", "부업 방법", "블로그 수익화",
+    "영어 공부법", "자격증 추천", "이직 준비", "여행 추천", "홈카페 레시피",
+    "육아 꿀팁", "아기 이유식", "수면 개선", "면역력 높이는 법",
 ]
 
 
-def fetch_google_trends(count: int = 20) -> list[str]:
-    """Google Trends 실시간 인기 검색어 (한국)"""
-    for url in GOOGLE_TRENDS_URLS:
+def _parse_rss(url: str, max_items: int = 3) -> list[str]:
+    """RSS에서 제목 추출"""
+    try:
+        resp = requests.get(url, timeout=8, headers=HEADERS)
+        resp.raise_for_status()
         try:
-            resp = requests.get(url, timeout=10, headers=HEADERS)
-            resp.raise_for_status()
             root = ET.fromstring(resp.content)
-            keywords = []
-            for item in root.findall(".//item"):
-                title = item.find("title")
-                if title is not None and title.text:
-                    keywords.append(title.text.strip())
-                if len(keywords) >= count:
-                    break
-            if keywords:
-                add_log(f"Google Trends 키워드 {len(keywords)}개 수집 완료")
-                return keywords
-        except Exception as e:
-            add_log(f"Google Trends 수집 실패 ({url}): {e}", "WARN")
-            continue
-    return []
+        except ET.ParseError:
+            content = resp.content.decode("utf-8", errors="ignore").encode("utf-8")
+            root = ET.fromstring(content)
+
+        titles = []
+        for item in root.findall(".//item"):
+            tag = item.find("title")
+            if tag is not None and tag.text:
+                # 특수문자 제거, 핵심 키워드만 추출
+                kw = re.sub(r"[^\w\s가-힣]", " ", tag.text).strip()
+                kw = re.sub(r"\s+", " ", kw).strip()
+                # 너무 길면 앞 20자만
+                if len(kw) > 20:
+                    kw = kw[:20].rsplit(" ", 1)[0]
+                if kw and len(kw) >= 4:
+                    titles.append(kw)
+            if len(titles) >= max_items:
+                break
+        return titles
+    except Exception:
+        return []
 
 
-def fetch_naver_news_keywords(count: int = 20) -> list[str]:
-    """네이버 뉴스 RSS에서 키워드 추출"""
+def _get_naver_autocomplete(keyword: str, max_count: int = 3) -> list[str]:
+    """네이버 자동완성 서브 키워드"""
+    try:
+        resp = requests.get(
+            "https://ac.search.naver.com/nx/ac",
+            params={"q": keyword, "st": "100", "r_format": "json",
+                    "r_enc": "UTF-8", "q_enc": "UTF-8"},
+            timeout=5, headers=HEADERS,
+        )
+        data = resp.json()
+        items = data.get("items", [[]])[0]
+        return [item[0] for item in items[:max_count] if item]
+    except Exception:
+        return []
+
+
+def fetch_all_rss_keywords(max_total: int = 30) -> list[str]:
+    """전체 RSS에서 키워드 수집"""
     keywords = []
-    for url in NAVER_RSS_URLS:
-        if len(keywords) >= count:
+    for url in ALL_RSS_FEEDS:
+        if len(keywords) >= max_total:
             break
-        try:
-            resp = requests.get(url, timeout=10, headers=HEADERS)
-            resp.raise_for_status()
-
-            # XML 파싱 (인코딩 문제 대비)
-            content = resp.content
-            try:
-                root = ET.fromstring(content)
-            except ET.ParseError:
-                content = resp.content.decode("utf-8", errors="ignore").encode("utf-8")
-                root = ET.fromstring(content)
-
-            for item in root.findall(".//item"):
-                title = item.find("title")
-                if title is not None and title.text:
-                    kw = title.text.strip()[:50]
-                    if kw and kw not in keywords:
-                        keywords.append(kw)
-                if len(keywords) >= count:
-                    break
-        except Exception as e:
-            add_log(f"네이버 뉴스 RSS 실패 ({url}): {e}", "WARN")
-            continue
-
-    if keywords:
-        add_log(f"네이버 뉴스 키워드 {len(keywords)}개 수집 완료")
+        titles = _parse_rss(url, max_items=2)
+        for kw in titles:
+            if kw not in keywords:
+                keywords.append(kw)
+    add_log(f"RSS 키워드 {len(keywords)}개 수집")
     return keywords
 
 
-def get_fresh_keywords(count: int = 10, source: str = "google") -> list[str]:
+def get_fresh_keywords(count: int = 20, source: str = "both") -> list[str]:
     """
-    중복 제거된 신선한 키워드 반환
-    source: 'google' | 'naver' | 'both'
+    RSS + 네이버 자동완성 서브 키워드 조합
+    반환: [키워드, 서브키워드1, 서브키워드2, ...]
     """
-    raw = []
-    if source in ("google", "both"):
-        raw += fetch_google_trends(30)
-    if source in ("naver", "both"):
-        raw += fetch_naver_news_keywords(30)
+    # RSS에서 기본 키워드 수집
+    rss_keywords = fetch_all_rss_keywords(max_total=15)
 
-    # 수집 실패 시 폴백 키워드 사용
-    if not raw:
-        add_log("외부 키워드 수집 실패 - 기본 키워드 사용", "WARN")
-        raw = FALLBACK_KEYWORDS[:]
+    if not rss_keywords:
+        add_log("RSS 수집 실패 - 기본 키워드 사용", "WARN")
+        rss_keywords = FALLBACK_KEYWORDS[:10]
 
-    # 중복 키워드(30일 이내 사용한 것) 제거
-    fresh = []
-    for kw in raw:
-        if not is_keyword_used(kw, days=30):
-            fresh.append(kw)
-        if len(fresh) >= count:
+    # 각 키워드 + 자동완성 서브 키워드 조합
+    combined = []
+    for kw in rss_keywords:
+        # 원본 키워드
+        if kw not in combined and not is_keyword_used(kw, days=30):
+            combined.append(kw)
+
+        # 서브 키워드 (자동완성)
+        sub_keywords = _get_naver_autocomplete(kw, max_count=2)
+        for sub in sub_keywords:
+            if sub not in combined and not is_keyword_used(sub, days=30):
+                combined.append(sub)
+
+        if len(combined) >= count:
             break
 
-    # 그래도 없으면 폴백에서 강제 반환
-    if not fresh:
-        fresh = FALLBACK_KEYWORDS[:count]
+    # 부족하면 폴백
+    if not combined:
+        combined = FALLBACK_KEYWORDS[:count]
 
-    add_log(f"신선한 키워드 {len(fresh)}개 선별 완료 (소스: {source})")
-    return fresh
+    add_log(f"최종 키워드 {len(combined)}개 (RSS + 서브키워드)")
+    return combined[:count]
