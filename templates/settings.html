@@ -147,55 +147,6 @@
   </div>
 </div>
 
-<!-- 글쓰기 설정 -->
-<div class="panel">
-  <h2>글쓰기 설정</h2>
-
-  <div class="form-row">
-    <div class="form-group">
-      <label>키워드 소스</label>
-      <select id="keyword_source">
-        <option value="google" {% if config.keyword_source == 'google' %}selected{% endif %}>
-          Google Trends
-        </option>
-        <option value="naver" {% if config.keyword_source == 'naver' %}selected{% endif %}>
-          네이버 뉴스
-        </option>
-        <option value="both" {% if config.keyword_source == 'both' %}selected{% endif %}>
-          둘 다 사용
-        </option>
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label>기본 글 갯수</label>
-      <input type="number" id="batch_count" value="{{ config.batch_count }}" min="1" max="20">
-    </div>
-
-    <div class="form-group">
-      <label>글 간격 (분)</label>
-      <input type="number" id="post_interval_minutes" value="{{ config.post_interval_minutes }}" min="10">
-    </div>
-  </div>
-
-  <div class="form-row">
-    <div class="form-group">
-      <label>글당 이미지 수</label>
-      <input type="number" id="image_count" value="{{ config.image_count }}" min="1" max="10">
-    </div>
-
-    <div class="form-group">
-      <label>최소 글 길이 (글자)</label>
-      <input type="number" id="min_content_length" value="{{ config.min_content_length }}" min="300">
-    </div>
-  </div>
-
-  <div class="form-group">
-    <label>글쓰기 말투 / 스타일</label>
-    <textarea id="writing_style" rows="3"
-              placeholder="예: 친근하고 정보성 있는 블로그 말투로, 독자가 쉽게 이해할 수 있게 작성">{{ config.writing_style }}</textarea>
-  </div>
-</div>
 
 <div class="action-bar">
   <button class="btn-primary btn-large" onclick="saveSettings()">💾 설정 저장</button>
@@ -218,12 +169,6 @@ async function saveSettings() {
     naver_client_id: document.getElementById('naver_client_id').value,
     naver_client_secret: document.getElementById('naver_client_secret').value,
     blogger_blog_id: document.getElementById('blogger_blog_id').value,
-    keyword_source: document.getElementById('keyword_source').value,
-    batch_count: parseInt(document.getElementById('batch_count').value),
-    post_interval_minutes: parseInt(document.getElementById('post_interval_minutes').value),
-    image_count: parseInt(document.getElementById('image_count').value),
-    min_content_length: parseInt(document.getElementById('min_content_length').value),
-    writing_style: document.getElementById('writing_style').value,
   };
 
   const res = await fetch('/settings/save', {

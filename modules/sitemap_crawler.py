@@ -153,28 +153,26 @@ def find_related_links(paragraph: str, top_n: int = 2) -> list[dict]:
     return scored[:top_n]
 
 
-def insert_external_links(content: str, min_score: float = 0.08) -> str:
+def insert_external_links(content: str, keyword: str = "") -> str:
     """
-    HTML 본문의 각 <p> 문단에 유사 외부 링크 삽입
+    1) 본문 각 문단에 유사 외부 링크 삽입 (있을 때)
+    2) 글 끝에 '함께 보면 좋은 글' 섹션 무조건 추가 (3개)
     """
     refresh_sitemap_cache()
 
     soup = BeautifulSoup(content, "html.parser")
-    paragraphs = soup.find_all("p")
 
+    # ── 문단별 인라인 링크 ────────────────────────────
     used_urls = set()
-    insert_count = 0
-
-    for p in paragraphs:
+    inline_count = 0
+    for p in soup.find_all("p"):
         text = p.get_text()
         if len(text) < 50:
             continue
-
         links = find_related_links(text, top_n=2)
         for link in links:
-            if link["url"] in used_urls or link["score"] < min_score:
+            if link["url"] in used_urls or link["score"] < 0.08:
                 continue
-            # 문단 끝에 관련 링크 추가
             link_tag = soup.new_tag(
                 "a", href=link["url"], target="_blank", rel="noopener noreferrer",
                 style="color:#1a73e8;text-decoration:underline;"
@@ -182,8 +180,83 @@ def insert_external_links(content: str, min_score: float = 0.08) -> str:
             link_tag.string = f" → {link['title'] or '관련 글 보기'}"
             p.append(link_tag)
             used_urls.add(link["url"])
-            insert_count += 1
-            break  # 문단당 최대 1개
+            inline_count += 1
+            break
 
-    add_log(f"외부 링크 {insert_count}개 삽입 완료")
+    # ── 글 끝 '함께 보면 좋은 글' 무조건 추가 ──────────
+    related = _get_related_links_for_footer(keyword, used_urls, count=3)
+    if related:
+        footer_html = _build_related_section(related)
+        footer_soup = BeautifulSoup(footer_html, "html.parser")
+        soup.append(footer_soup)
+
+    add_log(f"외부 링크 삽입: 인라인 {inline_count}개 + 하단 {len(related)}개")
     return str(soup)
+
+
+def _get_related_links_for_footer(keyword: str, exclude_urls: set, count: int = 3) -> list[dict]:
+    """하단 섹션용 링크 - 키워드 유사도 기준, 없으면 최신 글"""
+    all_entries = []
+    for site_info in TARGET_SITES:
+        entries = _load_cache(site_info["name"])
+        for e in entries:
+            e["site"] = site_info["name"]
+        all_entries += entries
+
+    # 유사도 점수 계산
+    scored = []
+    for e in all_entries:
+        if e["url"] in exclude_urls or not e.get("title"):
+            continue
+        score = _similarity_score(keyword, e["title"])
+        scored.append({**e, "score": score})
+
+    scored.sort(key=lambda x: x["score"], reverse=True)
+
+    # 상위 결과 - 사이트별로 균형있게
+    result = []
+    sites_seen = {}
+    for item in scored:
+        site = item["site"]
+        sites_seen[site] = sites_seen.get(site, 0)
+        if sites_seen[site] < 2:  # 사이트당 최대 2개
+            result.append(item)
+            sites_seen[site] += 1
+        if len(result) >= count:
+            break
+
+    # 부족하면 그냥 앞에서 채움
+    if len(result) < count:
+        for item in scored:
+            if item not in result:
+                result.append(item)
+            if len(result) >= count:
+                break
+
+    return result[:count]
+
+
+def _build_related_section(links: list[dict]) -> str:
+    """함께 보면 좋은 글 HTML 섹션 생성"""
+    items_html = ""
+    for link in links:
+        title = link.get("title") or "관련 글 보기"
+        url = link["url"]
+        site = link.get("site", "")
+        site_label = "BodyAndWell" if "bodyandwell" in site else "BizAchieve"
+        items_html += f"""
+        <li style="margin-bottom:8px;">
+          <a href="{url}" target="_blank" rel="noopener noreferrer"
+             style="color:#1a73e8;text-decoration:none;font-weight:500;">
+            📌 {title}
+          </a>
+          <span style="font-size:0.8em;color:#888;margin-left:6px;">[{site_label}]</span>
+        </li>"""
+
+    return f"""
+<div style="margin-top:40px;padding:20px;background:#f8fafc;border-left:4px solid #4f46e5;border-radius:8px;">
+  <h3 style="margin:0 0 12px;font-size:1.1em;color:#1e293b;">📚 함께 보면 좋은 글</h3>
+  <ul style="list-style:none;padding:0;margin:0;">
+    {items_html}
+  </ul>
+</div>"""

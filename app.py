@@ -38,35 +38,50 @@ def index():
 @app.route("/run/now", methods=["POST"])
 def run_now():
     data = request.json or {}
-    keyword = data.get("keyword", "").strip() or None
-    count = int(data.get("count", 1))
+    keywords = data.get("keywords", [])
+    manual = data.get("keyword", "").strip()
+    if not keywords and manual:
+        keywords = [manual]
+
+    settings = {
+        "image_count": int(data.get("image_count", 5)),
+        "min_content_length": int(data.get("min_content_length", 800)),
+        "writing_style": data.get("writing_style", ""),
+    }
+    count = len(keywords) or 1
 
     def _run():
-        if count == 1:
-            run_single_post(keyword=keyword)
-        else:
-            run_batch(count=count)
+        run_batch(keywords=keywords or None, count=count, scheduled=False, settings=settings)
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
-    add_log(f"즉시 실행 요청: {count}개 (키워드: {keyword or '자동'})")
+    kw_str = ", ".join(keywords) if keywords else "자동"
+    add_log(f"즉시 실행 요청: {count}개 ({kw_str})")
     return jsonify({"success": True, "message": f"{count}개 글 작성을 시작했습니다."})
 
 
 @app.route("/run/scheduled", methods=["POST"])
 def run_scheduled():
     data = request.json or {}
-    count = int(data.get("count", 1))
-    scheduled_start = data.get("scheduled_start", "")
+    keywords = data.get("keywords", [])
     interval = int(data.get("interval_minutes", 60))
+    count = len(keywords) or int(data.get("count", 1))
+
+    settings = {
+        "image_count": int(data.get("image_count", 5)),
+        "min_content_length": int(data.get("min_content_length", 800)),
+        "writing_style": data.get("writing_style", ""),
+    }
 
     def _run():
-        run_batch(count=count, interval_minutes=interval, scheduled_start=scheduled_start)
+        run_batch(keywords=keywords or None, count=count,
+                  interval_minutes=interval, scheduled=True, settings=settings)
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
-    add_log(f"예약 실행 요청: {count}개, {scheduled_start}부터 {interval}분 간격")
-    return jsonify({"success": True, "message": f"{count}개 예약 글쓰기를 설정했습니다."})
+    kw_str = ", ".join(keywords) if keywords else "자동"
+    add_log(f"예약 실행 요청: {count}개 ({interval}분 간격) - {kw_str}")
+    return jsonify({"success": True, "message": f"{count}개 글을 {interval}분 간격으로 예약했습니다."})
 
 
 # ─── 키워드 미리보기 (기본) ────────────────────────────

@@ -3,7 +3,6 @@
 """
 import time
 from datetime import datetime, timedelta
-from config import get_setting
 from database.db import add_log, mark_keyword_used, add_post, update_post_status
 from modules.keyword_fetcher import get_fresh_keywords
 from modules.ai_writer import generate_post
@@ -12,16 +11,20 @@ from modules.sitemap_crawler import insert_external_links
 from modules.blogger_uploader import publish_post
 
 
-def run_single_post(keyword: str = None, scheduled_at: str = None) -> dict:
+def run_single_post(
+    keyword: str = None,
+    scheduled_at: str = None,
+    settings: dict = None,
+) -> dict:
     """
     단일 글 작성 및 업로드 파이프라인
-    keyword가 None이면 자동 키워드 선택
-    반환: {success, post_id, title, url, error}
+    settings: {image_count, min_content_length, writing_style}
     """
+    settings = settings or {}
     try:
         # 1. 키워드 선택
         if not keyword:
-            keywords = get_fresh_keywords(count=1, source=get_setting("keyword_source") or "google")
+            keywords = get_fresh_keywords(count=1)
             if not keywords:
                 return {"success": False, "error": "사용 가능한 키워드 없음"}
             keyword = keywords[0]
@@ -29,16 +32,17 @@ def run_single_post(keyword: str = None, scheduled_at: str = None) -> dict:
         add_log(f"=== 글쓰기 파이프라인 시작: {keyword} ===")
 
         # 2. AI 글쓰기
-        post_data = generate_post(keyword)
+        style = settings.get("writing_style", "")
+        post_data = generate_post(keyword, style=style)
         post_id = add_post(keyword, post_data["title"], scheduled_at)
 
         # 3. 이미지 삽입
-        image_count = get_setting("image_count") or 5
+        image_count = settings.get("image_count", 5)
         images = get_images(keyword, image_count)
         content_with_images = embed_images_in_content(post_data["content"], images)
 
-        # 4. 외부 링크 삽입
-        final_content = insert_external_links(content_with_images)
+        # 4. 외부 링크 삽입 (무조건 하단 '함께 보면 좋은 글' 포함)
+        final_content = insert_external_links(content_with_images, keyword=keyword)
 
         # 5. 메타 설명 + 본문 합치기
         full_content = (
@@ -75,37 +79,45 @@ def run_single_post(keyword: str = None, scheduled_at: str = None) -> dict:
         return {"success": False, "error": str(e)}
 
 
-def run_batch(count: int = None, interval_minutes: int = None, scheduled_start: str = None):
+def run_batch(
+    keywords: list = None,
+    count: int = 1,
+    interval_minutes: int = 60,
+    scheduled: bool = False,
+    settings: dict = None,
+):
     """
-    여러 개 글 배치 작성
-    count: 작성할 글 수
-    interval_minutes: 글 간격 (분)
-    scheduled_start: 첫 발행 시간 (ISO 형식)
+    여러 키워드 배치 작성
+    keywords: 지정 키워드 목록 (없으면 자동)
+    scheduled: True면 interval_minutes 간격으로 예약 발행
     """
-    count = count or get_setting("batch_count") or 3
-    interval = interval_minutes or get_setting("post_interval_minutes") or 60
+    settings = settings or {}
 
-    add_log(f"배치 시작: {count}개, {interval}분 간격")
+    # 키워드 준비
+    if not keywords:
+        keywords = get_fresh_keywords(count=count)
+    if not keywords:
+        keywords = [None] * count  # 자동 선택
+
+    add_log(f"배치 시작: {len(keywords)}개, {'예약 ' + str(interval_minutes) + '분 간격' if scheduled else '즉시 발행'}")
     results = []
 
-    for i in range(count):
-        # 예약 시간 계산
+    for i, kw in enumerate(keywords):
+        # 예약 시간 계산 (예약 모드)
         sched_at = None
-        if scheduled_start:
-            from dateutil.parser import parse as parse_dt
-            base = parse_dt(scheduled_start)
-            sched_at = (base + timedelta(minutes=interval * i)).isoformat()
+        if scheduled:
+            from datetime import timezone
+            base = datetime.now() + timedelta(minutes=interval_minutes * (i + 1))
+            sched_at = base.strftime("%Y-%m-%dT%H:%M:%S+09:00")
 
-        result = run_single_post(scheduled_at=sched_at)
+        result = run_single_post(keyword=kw, scheduled_at=sched_at, settings=settings)
         results.append(result)
 
-        if i < count - 1:
-            if not scheduled_start:
-                # 즉시 발행 모드: API 부하 방지 대기
-                wait = min(interval * 60, 30)
-                add_log(f"다음 글 대기 중... {wait}초")
-                time.sleep(wait)
+        # 즉시 모드: 글 사이 30초 대기 (API 부하 방지)
+        if not scheduled and i < len(keywords) - 1:
+            add_log("다음 글 준비 중... 30초 대기")
+            time.sleep(30)
 
     success = sum(1 for r in results if r["success"])
-    add_log(f"배치 완료: 성공 {success}/{count}")
+    add_log(f"배치 완료: 성공 {success}/{len(keywords)}")
     return results

@@ -345,6 +345,66 @@ small { color: var(--text-muted); font-size: 12px; display: block; margin-top: 4
 
 .link-small { font-size: 12px; font-weight: 400; margin-left: 8px; }
 
+/* ─── 번호 칩 다중선택 ───────────────────────────────── */
+.chip-num {
+  display: inline-block;
+  background: rgba(79,70,229,0.15);
+  color: var(--primary);
+  font-size: 10px; font-weight: 700;
+  border-radius: 3px;
+  padding: 0 4px; margin-right: 4px;
+}
+.chip.selected .chip-num { background: rgba(255,255,255,0.3); color: white; }
+
+.selected-info {
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap;
+  background: #eff6ff; border: 1px solid #bfdbfe;
+  border-radius: 6px; padding: 8px 12px;
+  font-size: 13px; color: #1d4ed8;
+  margin-bottom: 12px;
+}
+.sel-tag {
+  background: #dbeafe; color: #1e40af;
+  padding: 2px 8px; border-radius: 4px; font-size: 12px;
+}
+.btn-clear {
+  background: none; border: 1px solid #bfdbfe;
+  color: #6366f1; padding: 2px 10px;
+  border-radius: 4px; font-size: 12px; cursor: pointer;
+  margin-left: auto;
+}
+.btn-clear:hover { background: #e0e7ff; }
+
+/* ─── 실행 버튼 ──────────────────────────────────────── */
+.run-btns { display: flex; gap: 12px; margin: 12px 0; }
+.run-btns .btn-large { flex: 1; margin-top: 0; }
+.btn-schedule {
+  flex: 1;
+  background: #0f766e; color: white;
+  border: none; padding: 12px 20px;
+  border-radius: 6px; font-size: 15px;
+  font-weight: 600; cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-schedule:hover { background: #0d9488; }
+
+/* ─── 글쓰기 설정 (접이식) ───────────────────────────── */
+.writing-settings {
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px; overflow: hidden;
+}
+.writing-settings summary {
+  padding: 10px 16px;
+  cursor: pointer; font-size: 13px;
+  font-weight: 600; color: var(--text-muted);
+  background: var(--bg);
+  user-select: none;
+}
+.writing-settings summary:hover { background: #f1f5f9; }
+.settings-inner { padding: 16px; }
+
 /* ─── 반응형 ─────────────────────────────────────────── */
 @media (max-width: 600px) {
   .stats-grid { grid-template-columns: 1fr 1fr; }

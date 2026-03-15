@@ -32,55 +32,60 @@
 <!-- 실행 패널 -->
 <div class="panel">
   <h2>글 쓰기 실행</h2>
-  <div class="run-tabs">
-    <button class="tab-btn active" onclick="switchTab('now')">즉시 실행</button>
-    <button class="tab-btn" onclick="switchTab('scheduled')">예약 실행</button>
+
+  <!-- 키워드 입력 + 추천 -->
+  <div class="form-group">
+    <label>직접 키워드 입력 (선택사항)</label>
+    <div class="input-with-btn">
+      <input type="text" id="manual-keyword" placeholder="입력 없이 추천 키워드 선택 가능">
+      <button class="btn-secondary" onclick="loadKeywords()">키워드 추천</button>
+    </div>
   </div>
 
-  <!-- 즉시 실행 -->
-  <div id="tab-now" class="tab-content active">
-    <div class="form-row">
-      <div class="form-group">
-        <label>키워드 (비우면 자동 선택)</label>
-        <div class="input-with-btn">
-          <input type="text" id="manual-keyword" placeholder="예: 다이어트 방법">
-          <button class="btn-secondary" onclick="loadKeywords()">키워드 추천</button>
-        </div>
-      </div>
-      <div class="form-group">
-        <label>글 갯수</label>
-        <input type="number" id="now-count" value="1" min="1" max="20">
-      </div>
-    </div>
+  <!-- 번호 키워드 칩 -->
+  <div id="keyword-list" class="keyword-chips" style="display:none;"></div>
+  <div id="selected-info" class="selected-info" style="display:none;">
+    선택된 키워드: <span id="selected-count">0</span>개
+    <span id="selected-labels"></span>
+    <button class="btn-clear" onclick="clearSelection()">선택 초기화</button>
+  </div>
 
-    <!-- 키워드 추천 칩 목록 -->
-    <div id="keyword-list" class="keyword-chips" style="display:none;"></div>
-
+  <!-- 실행 버튼 -->
+  <div class="run-btns">
     <button class="btn-primary btn-large" onclick="runNow()">
       ▶ 지금 바로 글쓰기 시작
     </button>
-  </div>
-
-  <!-- 예약 실행 -->
-  <div id="tab-scheduled" class="tab-content">
-    <div class="form-row">
-      <div class="form-group">
-        <label>첫 발행 시간</label>
-        <input type="datetime-local" id="sched-start">
-      </div>
-      <div class="form-group">
-        <label>글 갯수</label>
-        <input type="number" id="sched-count" value="3" min="1" max="20">
-      </div>
-      <div class="form-group">
-        <label>글 간격 (분)</label>
-        <input type="number" id="sched-interval" value="60" min="10">
-      </div>
-    </div>
-    <button class="btn-primary btn-large" onclick="runScheduled()">
-      🕐 예약 글쓰기 설정
+    <button class="btn-schedule btn-large" onclick="runEveryInterval()">
+      🕐 <span id="interval-label">60</span>분 마다 글 예약하기
     </button>
   </div>
+
+  <!-- 글쓰기 설정 -->
+  <details class="writing-settings" id="writing-settings-panel">
+    <summary>⚙️ 글쓰기 설정</summary>
+    <div class="settings-inner">
+      <div class="form-row">
+        <div class="form-group">
+          <label>발행 간격 (분)</label>
+          <input type="number" id="post_interval_minutes" value="60" min="10"
+                 oninput="document.getElementById('interval-label').textContent=this.value">
+        </div>
+        <div class="form-group">
+          <label>글당 이미지 수</label>
+          <input type="number" id="image_count" value="5" min="1" max="10">
+        </div>
+        <div class="form-group">
+          <label>최소 글 길이 (글자)</label>
+          <input type="number" id="min_content_length" value="800" min="300">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>글쓰기 말투 / 스타일</label>
+        <textarea id="writing_style" rows="2"
+                  placeholder="예: 친근하고 정보성 있는 블로그 말투">친근하고 정보성 있는 블로그 말투</textarea>
+      </div>
+    </div>
+  </details>
 </div>
 
 <!-- 진행 상태 -->
@@ -105,13 +110,7 @@
       {% for post in posts %}
       <tr>
         <td><span class="tag">{{ post.keyword }}</span></td>
-        <td>
-          {% if post.blogger_post_id %}
-            {{ post.title or '-' }}
-          {% else %}
-            {{ post.title or '-' }}
-          {% endif %}
-        </td>
+        <td>{{ post.title or '-' }}</td>
         <td>
           <span class="status-badge status-{{ post.status }}">
             {% if post.status == 'published' %}✅ 발행됨
@@ -148,66 +147,115 @@
 
 {% block scripts %}
 <script>
-function switchTab(tab) {
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-  event.target.classList.add('active');
-  document.getElementById('tab-' + tab).classList.add('active');
-}
+// ─── 키워드 추천 ──────────────────────────────────────
+let selectedKeywords = [];
 
 async function loadKeywords() {
   showToast('키워드 불러오는 중...');
   const container = document.getElementById('keyword-list');
   container.innerHTML = '<span style="color:#64748b;font-size:13px;">RSS 수집 + 서브키워드 조합 중...</span>';
   container.style.display = 'flex';
+  selectedKeywords = [];
+  updateSelectedInfo();
 
   const res = await fetch('/api/keywords?source=both');
   const data = await res.json();
 
-  container.innerHTML = data.keywords.map(kw =>
-    `<span class="chip" onclick="selectKeyword(this)">${kw}</span>`
+  container.innerHTML = data.keywords.map((kw, i) =>
+    `<span class="chip" onclick="toggleKeyword(this, '${kw.replace(/'/g,"\\'")}')">
+      <span class="chip-num">${i + 1}</span>${kw}
+    </span>`
   ).join('');
 }
 
-function selectKeyword(el) {
-  document.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
-  el.classList.add('selected');
-  document.getElementById('manual-keyword').value = el.textContent;
+function toggleKeyword(el, kw) {
+  if (el.classList.contains('selected')) {
+    el.classList.remove('selected');
+    selectedKeywords = selectedKeywords.filter(k => k !== kw);
+  } else {
+    el.classList.add('selected');
+    selectedKeywords.push(kw);
+  }
+  updateSelectedInfo();
 }
 
+function updateSelectedInfo() {
+  const info = document.getElementById('selected-info');
+  const countEl = document.getElementById('selected-count');
+  const labelsEl = document.getElementById('selected-labels');
+
+  if (selectedKeywords.length === 0) {
+    info.style.display = 'none';
+  } else {
+    info.style.display = 'flex';
+    countEl.textContent = selectedKeywords.length;
+    labelsEl.innerHTML = selectedKeywords.map((k, i) =>
+      `<span class="sel-tag">${i+1}. ${k}</span>`
+    ).join('');
+  }
+}
+
+function clearSelection() {
+  selectedKeywords = [];
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+  updateSelectedInfo();
+}
+
+function getKeywordsToRun() {
+  // 선택된 칩 있으면 우선, 없으면 직접 입력, 없으면 자동
+  if (selectedKeywords.length > 0) return selectedKeywords;
+  const manual = document.getElementById('manual-keyword').value.trim();
+  return manual ? [manual] : [];
+}
+
+function getWritingSettings() {
+  return {
+    interval_minutes: parseInt(document.getElementById('post_interval_minutes').value) || 60,
+    image_count: parseInt(document.getElementById('image_count').value) || 5,
+    min_content_length: parseInt(document.getElementById('min_content_length').value) || 800,
+    writing_style: document.getElementById('writing_style').value,
+  };
+}
+
+// ─── 즉시 실행 ────────────────────────────────────────
 async function runNow() {
-  const keyword = document.getElementById('manual-keyword').value.trim();
-  const count = parseInt(document.getElementById('now-count').value) || 1;
+  const keywords = getKeywordsToRun();
+  const settings = getWritingSettings();
 
   showProgress();
   const res = await fetch('/run/now', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({keyword, count})
+    body: JSON.stringify({ keywords, count: keywords.length || 1, ...settings })
   });
   const data = await res.json();
   showToast(data.message, data.success ? 'success' : 'error');
   startLogPolling();
 }
 
-async function runScheduled() {
-  const scheduled_start = document.getElementById('sched-start').value;
-  const count = parseInt(document.getElementById('sched-count').value) || 1;
-  const interval_minutes = parseInt(document.getElementById('sched-interval').value) || 60;
-
-  if (!scheduled_start) {
-    showToast('발행 시간을 선택해주세요.', 'error'); return;
-  }
+// ─── 예약 실행 ────────────────────────────────────────
+async function runEveryInterval() {
+  const keywords = getKeywordsToRun();
+  const settings = getWritingSettings();
+  const count = keywords.length || 1;
 
   const res = await fetch('/run/scheduled', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({scheduled_start, count, interval_minutes})
+    body: JSON.stringify({
+      keywords,
+      count,
+      interval_minutes: settings.interval_minutes,
+      ...settings
+    })
   });
   const data = await res.json();
   showToast(data.message, data.success ? 'success' : 'error');
+  showProgress();
+  startLogPolling();
 }
 
+// ─── 진행 로그 ────────────────────────────────────────
 function showProgress() {
   document.getElementById('progress-box').style.display = 'block';
   document.getElementById('progress-log').innerHTML = '<div class="log-item">시작 중...</div>';
@@ -220,7 +268,6 @@ function startLogPolling() {
     const res = await fetch('/api/logs');
     const data = await res.json();
     const container = document.getElementById('progress-log');
-    // 오래된 순서대로 (위→아래)
     const sorted = [...data.logs].reverse();
     container.innerHTML = sorted.slice(-15).map(l =>
       `<div class="log-item log-${l.level.toLowerCase()}">
@@ -229,7 +276,6 @@ function startLogPolling() {
         <span class="log-msg">${l.message}</span>
       </div>`
     ).join('');
-    // 사용자가 위로 스크롤 중이면 자동 내리기 안 함
     const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 50;
     if (isAtBottom) container.scrollTop = container.scrollHeight;
   }, 2000);
