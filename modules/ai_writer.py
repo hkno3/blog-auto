@@ -13,7 +13,7 @@ def _get_model():
     if not api_key:
         raise ValueError("Gemini API 키가 설정되지 않았습니다.")
     genai.configure(api_key=api_key)
-    return genai.GenerativeModel("gemini-2.0-flash")  # 무료 티어
+    return genai.GenerativeModel("gemini-2.0-flash-lite")  # 무료 티어
 
 
 def _build_prompt(keyword: str, style: str = "") -> str:
