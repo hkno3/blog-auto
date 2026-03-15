@@ -295,7 +295,6 @@ def _build_related_section(links: list[dict]) -> str:
              style="color:#1a73e8;text-decoration:none;font-weight:500;">
             📌 {title}
           </a>
-          <span style="font-size:0.8em;color:#888;margin-left:6px;">[{site_label}]</span>
         </li>"""
 
     if not items_html:
