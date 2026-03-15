@@ -194,16 +194,8 @@ def insert_external_links(content: str, keyword: str = "") -> str:
     return str(soup)
 
 
-# 캐시 없을 때 사용할 폴백 링크
-FALLBACK_LINKS = [
-    {"url": "https://bodyandwell.com", "title": "건강과 웰빙 정보 - Body And Well", "site": "bodyandwell"},
-    {"url": "https://bizachieve.com", "title": "비즈니스 성공 전략 - BizAchieve", "site": "bizachieve"},
-    {"url": "https://bodyandwell.com", "title": "최신 건강 정보 보러가기", "site": "bodyandwell"},
-]
-
-
 def _get_related_links_for_footer(keyword: str, exclude_urls: set, count: int = 3) -> list[dict]:
-    """하단 섹션용 링크 - 키워드 유사도 기준, 없으면 폴백 링크"""
+    """하단 섹션용 링크 - 캐시에서 유사도 기준으로 선택, 캐시 없으면 강제 크롤링"""
     all_entries = []
     for site_info in TARGET_SITES:
         entries = _load_cache(site_info["name"])
@@ -211,22 +203,32 @@ def _get_related_links_for_footer(keyword: str, exclude_urls: set, count: int = 
             e["site"] = site_info["name"]
         all_entries += entries
 
-    # 캐시가 비어있으면 폴백 즉시 반환
+    # 캐시 없으면 지금 바로 크롤링
     if not all_entries:
-        add_log("sitemap 캐시 없음 - 폴백 링크 사용", "WARN")
-        return FALLBACK_LINKS[:count]
+        add_log("sitemap 캐시 없음 - 즉시 크롤링 시작")
+        refresh_sitemap_cache(force=True)
+        for site_info in TARGET_SITES:
+            entries = _load_cache(site_info["name"])
+            for e in entries:
+                e["site"] = site_info["name"]
+            all_entries += entries
+
+    # 그래도 없으면 빈 리스트 (섹션 빌더에서 처리)
+    if not all_entries:
+        add_log("sitemap 크롤링 실패 - 링크 없음", "WARN")
+        return []
 
     # 유사도 점수 계산
     scored = []
     for e in all_entries:
-        if e["url"] in exclude_urls or not e.get("title"):
+        if e["url"] in exclude_urls or not e.get("title") or not e.get("url"):
             continue
         score = _similarity_score(keyword, e["title"])
         scored.append({**e, "score": score})
 
     scored.sort(key=lambda x: x["score"], reverse=True)
 
-    # 사이트별 균형있게 선택
+    # 사이트별 균형있게 선택 (bodyandwell 1~2개 + bizachieve 1~2개)
     result = []
     sites_seen = {}
     for item in scored:
@@ -238,22 +240,33 @@ def _get_related_links_for_footer(keyword: str, exclude_urls: set, count: int = 
         if len(result) >= count:
             break
 
-    # 부족하면 폴백으로 채움
-    for fb in FALLBACK_LINKS:
-        if len(result) >= count:
-            break
-        if fb["url"] not in {r["url"] for r in result}:
-            result.append(fb)
+    # 부족하면 점수 무관하게 채움
+    if len(result) < count:
+        for item in scored:
+            if item not in result:
+                result.append(item)
+            if len(result) >= count:
+                break
 
     return result[:count]
 
 
 def _build_related_section(links: list[dict]) -> str:
-    """함께 보면 좋은 글 HTML 섹션 생성"""
+    """함께 보면 좋은 글 HTML 섹션 생성 - 링크 없으면 각 사이트 최신 글 직접 크롤"""
+    # 링크가 없으면 각 사이트에서 첫 번째 글 직접 가져오기
+    if not links:
+        links = _crawl_latest_from_each_site(count=3)
+
+    if not links:
+        add_log("외부 링크를 가져올 수 없음", "WARN")
+        return ""
+
     items_html = ""
     for link in links:
         title = link.get("title") or "관련 글 보기"
-        url = link["url"]
+        url = link.get("url", "")
+        if not url:
+            continue
         site = link.get("site", "")
         site_label = "BodyAndWell" if "bodyandwell" in site else "BizAchieve"
         items_html += f"""
@@ -265,6 +278,9 @@ def _build_related_section(links: list[dict]) -> str:
           <span style="font-size:0.8em;color:#888;margin-left:6px;">[{site_label}]</span>
         </li>"""
 
+    if not items_html:
+        return ""
+
     return f"""
 <div style="margin-top:40px;padding:20px;background:#f8fafc;border-left:4px solid #4f46e5;border-radius:8px;">
   <h3 style="margin:0 0 12px;font-size:1.1em;color:#1e293b;">📚 함께 보면 좋은 글</h3>
@@ -272,3 +288,24 @@ def _build_related_section(links: list[dict]) -> str:
     {items_html}
   </ul>
 </div>"""
+
+
+def _crawl_latest_from_each_site(count: int = 3) -> list[dict]:
+    """각 사이트 sitemap에서 최신 글 직접 크롤링"""
+    results = []
+    per_site = max(1, count // len(TARGET_SITES))
+
+    for site_info in TARGET_SITES:
+        try:
+            sub_sitemaps = _parse_sitemap_index(site_info["sitemap"])
+            if not sub_sitemaps:
+                continue
+            # 첫 번째 하위 sitemap에서 글 가져오기
+            entries = _parse_sitemap(sub_sitemaps[0])
+            for e in entries[:per_site]:
+                if e.get("url") and e.get("title"):
+                    results.append({**e, "site": site_info["name"]})
+        except Exception as ex:
+            add_log(f"직접 크롤링 실패 ({site_info['name']}): {ex}", "WARN")
+
+    return results[:count]
