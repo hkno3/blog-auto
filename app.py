@@ -114,6 +114,7 @@ def settings():
         "gemini_key": "****" if get_api_key("gemini") else "",
         "unsplash_key": "****" if get_api_key("unsplash") else "",
         "pexels_key": "****" if get_api_key("pexels") else "",
+        "pixabay_key": "****" if get_api_key("pixabay") else "",
         "naver_ad_customer_id": get_api_key("naver_ad_customer_id") or "",
         "naver_ad_license": "****" if get_api_key("naver_ad_license") else "",
         "naver_ad_secret": "****" if get_api_key("naver_ad_secret") else "",
@@ -140,6 +141,7 @@ def settings_save():
         "gemini": data.get("gemini_key", ""),
         "unsplash": data.get("unsplash_key", ""),
         "pexels": data.get("pexels_key", ""),
+        "pixabay": data.get("pixabay_key", ""),
         "naver_ad_customer_id": data.get("naver_ad_customer_id", ""),
         "naver_ad_license": data.get("naver_ad_license", ""),
         "naver_ad_secret": data.get("naver_ad_secret", ""),
@@ -215,6 +217,25 @@ def test_api():
                 results["unsplash"] = {"ok": False, "msg": "API 키 없음"}
         except Exception as e:
             results["unsplash"] = {"ok": False, "msg": str(e)}
+
+    if api_name in ("pixabay", "all"):
+        try:
+            import requests as req
+            key = get_api_key("pixabay")
+            if key:
+                r = req.get(
+                    "https://pixabay.com/api/",
+                    params={"key": key, "q": "test", "per_page": 3},
+                    timeout=5,
+                )
+                r.raise_for_status()
+                data_r = r.json()
+                count = data_r.get("totalHits", 0)
+                results["pixabay"] = {"ok": True, "msg": f"연결 성공 (총 {count}개 이미지)"}
+            else:
+                results["pixabay"] = {"ok": False, "msg": "API 키 없음"}
+        except Exception as e:
+            results["pixabay"] = {"ok": False, "msg": str(e)}
 
     return jsonify(results)
 

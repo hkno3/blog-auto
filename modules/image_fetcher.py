@@ -2,6 +2,7 @@
 이미지 검색 모듈
 - Unsplash API (무료)
 - Pexels API (무료) - Unsplash 한도 초과 시 자동 전환
+- Pixabay API (무료) - Unsplash/Pexels 한도 초과 시 자동 전환
 """
 import requests
 from config import get_api_key
@@ -10,6 +11,7 @@ from database.db import add_log
 
 UNSPLASH_API = "https://api.unsplash.com/search/photos"
 PEXELS_API = "https://api.pexels.com/v1/search"
+PIXABAY_API = "https://pixabay.com/api/"
 
 
 def _fetch_unsplash(query: str, count: int = 5) -> list[dict]:
@@ -70,6 +72,41 @@ def _fetch_pexels(query: str, count: int = 5) -> list[dict]:
         return []
 
 
+def _fetch_pixabay(query: str, count: int = 5) -> list[dict]:
+    api_key = get_api_key("pixabay")
+    if not api_key:
+        return []
+    try:
+        resp = requests.get(
+            PIXABAY_API,
+            params={
+                "key": api_key,
+                "q": query,
+                "per_page": count,
+                "image_type": "photo",
+                "orientation": "horizontal",
+                "safesearch": "true",
+            },
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        images = []
+        for item in data.get("hits", []):
+            images.append({
+                "url": item["largeImageURL"],
+                "thumb": item["webformatURL"],
+                "alt": item.get("tags", query).split(",")[0].strip() or query,
+                "source": "Pixabay",
+                "photographer": item.get("user", "Unknown"),
+                "photographer_url": f"https://pixabay.com/users/{item.get('user', '')}-{item.get('user_id', '')}",
+            })
+        return images
+    except Exception as e:
+        add_log(f"Pixabay 이미지 검색 실패: {e}", "WARN")
+        return []
+
+
 def get_images(keyword: str, count: int = 5) -> list[dict]:
     """
     키워드로 이미지 검색 (Unsplash 우선, 부족하면 Pexels 보완)
@@ -82,6 +119,12 @@ def get_images(keyword: str, count: int = 5) -> list[dict]:
         pexels_images = _fetch_pexels(keyword, needed)
         images += pexels_images
         add_log(f"Pexels에서 {len(pexels_images)}개 이미지 추가")
+
+    if len(images) < count:
+        needed = count - len(images)
+        pixabay_images = _fetch_pixabay(keyword, needed)
+        images += pixabay_images
+        add_log(f"Pixabay에서 {len(pixabay_images)}개 이미지 추가")
 
     if not images:
         add_log(f"이미지 없음 - API 키 확인 필요 ({keyword})", "WARN")

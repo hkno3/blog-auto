@@ -59,6 +59,21 @@
       </a>
     </small>
   </div>
+
+  <div class="form-group">
+    <label>Pixabay API Key <span class="optional">선택</span></label>
+    <div class="input-with-btn">
+      <input type="password" id="pixabay_key" value="{{ config.pixabay_key }}"
+             placeholder="Pixabay API Key">
+      <button class="btn-secondary" onclick="testApi('pixabay')">연결 테스트</button>
+    </div>
+    <div id="pixabay-result" class="api-result"></div>
+    <small>
+      <a href="https://pixabay.com/api/docs/" target="_blank">
+        👉 Pixabay API 키 발급 (무료)
+      </a>
+    </small>
+  </div>
 </div>
 
 <!-- 네이버 API 설정 -->
@@ -163,6 +178,7 @@ async function saveSettings() {
     gemini_key: document.getElementById('gemini_key').value,
     unsplash_key: document.getElementById('unsplash_key').value,
     pexels_key: document.getElementById('pexels_key').value,
+    pixabay_key: document.getElementById('pixabay_key').value,
     naver_ad_customer_id: document.getElementById('naver_ad_customer_id').value,
     naver_ad_license: document.getElementById('naver_ad_license').value,
     naver_ad_secret: document.getElementById('naver_ad_secret').value,
