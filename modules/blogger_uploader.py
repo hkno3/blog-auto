@@ -95,18 +95,12 @@ def publish_post(
         if scheduled_at:
             body["published"] = scheduled_at
 
-        if is_draft or scheduled_at:
-            result = service.posts().insert(
-                blogId=blog_id,
-                body=body,
-                isDraft=is_draft or bool(scheduled_at),
-            ).execute()
-        else:
-            result = service.posts().insert(
-                blogId=blog_id,
-                body=body,
-                publish=True,
-            ).execute()
+        is_draft_mode = is_draft or bool(scheduled_at)
+        result = service.posts().insert(
+            blogId=blog_id,
+            body=body,
+            isDraft=is_draft_mode,
+        ).execute()
 
         post_id = result.get("id")
         post_url = result.get("url", "")

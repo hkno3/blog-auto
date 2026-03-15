@@ -218,14 +218,18 @@ function startLogPolling() {
     const res = await fetch('/api/logs');
     const data = await res.json();
     const container = document.getElementById('progress-log');
-    container.innerHTML = data.logs.slice(0, 15).map(l =>
+    // 오래된 순서대로 (위→아래)
+    const sorted = [...data.logs].reverse();
+    container.innerHTML = sorted.slice(-15).map(l =>
       `<div class="log-item log-${l.level.toLowerCase()}">
         <span class="log-time">${l.created_at}</span>
         <span class="log-level">[${l.level}]</span>
         <span class="log-msg">${l.message}</span>
       </div>`
     ).join('');
-    container.scrollTop = container.scrollHeight;
+    // 사용자가 위로 스크롤 중이면 자동 내리기 안 함
+    const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 50;
+    if (isAtBottom) container.scrollTop = container.scrollHeight;
   }, 2000);
   setTimeout(() => clearInterval(pollInterval), 300000);
 }
