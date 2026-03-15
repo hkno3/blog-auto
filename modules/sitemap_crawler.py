@@ -185,23 +185,36 @@ def insert_external_links(content: str, keyword: str = "") -> str:
 
     # ── 글 끝 '함께 보면 좋은 글' 무조건 추가 ──────────
     related = _get_related_links_for_footer(keyword, used_urls, count=3)
-    if related:
-        footer_html = _build_related_section(related)
-        footer_soup = BeautifulSoup(footer_html, "html.parser")
-        soup.append(footer_soup)
+    # 캐시 없어도 폴백 링크로 무조건 삽입
+    footer_html = _build_related_section(related)
+    footer_soup = BeautifulSoup(footer_html, "html.parser")
+    soup.append(footer_soup)
 
     add_log(f"외부 링크 삽입: 인라인 {inline_count}개 + 하단 {len(related)}개")
     return str(soup)
 
 
+# 캐시 없을 때 사용할 폴백 링크
+FALLBACK_LINKS = [
+    {"url": "https://bodyandwell.com", "title": "건강과 웰빙 정보 - Body And Well", "site": "bodyandwell"},
+    {"url": "https://bizachieve.com", "title": "비즈니스 성공 전략 - BizAchieve", "site": "bizachieve"},
+    {"url": "https://bodyandwell.com", "title": "최신 건강 정보 보러가기", "site": "bodyandwell"},
+]
+
+
 def _get_related_links_for_footer(keyword: str, exclude_urls: set, count: int = 3) -> list[dict]:
-    """하단 섹션용 링크 - 키워드 유사도 기준, 없으면 최신 글"""
+    """하단 섹션용 링크 - 키워드 유사도 기준, 없으면 폴백 링크"""
     all_entries = []
     for site_info in TARGET_SITES:
         entries = _load_cache(site_info["name"])
         for e in entries:
             e["site"] = site_info["name"]
         all_entries += entries
+
+    # 캐시가 비어있으면 폴백 즉시 반환
+    if not all_entries:
+        add_log("sitemap 캐시 없음 - 폴백 링크 사용", "WARN")
+        return FALLBACK_LINKS[:count]
 
     # 유사도 점수 계산
     scored = []
@@ -213,25 +226,24 @@ def _get_related_links_for_footer(keyword: str, exclude_urls: set, count: int = 
 
     scored.sort(key=lambda x: x["score"], reverse=True)
 
-    # 상위 결과 - 사이트별로 균형있게
+    # 사이트별 균형있게 선택
     result = []
     sites_seen = {}
     for item in scored:
         site = item["site"]
         sites_seen[site] = sites_seen.get(site, 0)
-        if sites_seen[site] < 2:  # 사이트당 최대 2개
+        if sites_seen[site] < 2:
             result.append(item)
             sites_seen[site] += 1
         if len(result) >= count:
             break
 
-    # 부족하면 그냥 앞에서 채움
-    if len(result) < count:
-        for item in scored:
-            if item not in result:
-                result.append(item)
-            if len(result) >= count:
-                break
+    # 부족하면 폴백으로 채움
+    for fb in FALLBACK_LINKS:
+        if len(result) >= count:
+            break
+        if fb["url"] not in {r["url"] for r in result}:
+            result.append(fb)
 
     return result[:count]
 
