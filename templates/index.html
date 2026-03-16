@@ -13,6 +13,47 @@
   </div>
 </div>
 
+<!-- Gemini 사용량 -->
+<div class="panel" style="margin-bottom:16px;">
+  <h2 style="margin-bottom:12px;">⚡ Gemini API 오늘 사용량
+    <span style="font-size:0.75em;color:#888;font-weight:normal;">무료 한도: 500회 / 100만 토큰/일</span>
+  </h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+    <!-- 요청 횟수 -->
+    <div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+        <span style="font-size:0.9em;color:#444;">요청 횟수</span>
+        <span style="font-size:0.9em;font-weight:600;">
+          {{ gemini_today.request_count }} / 500
+        </span>
+      </div>
+      {% set req_pct = [(gemini_today.request_count / 500 * 100), 100] | min %}
+      <div style="background:#e2e8f0;border-radius:4px;height:10px;">
+        <div style="width:{{ req_pct }}%;height:100%;border-radius:4px;
+          background:{% if req_pct >= 90 %}#ef4444{% elif req_pct >= 70 %}#f59e0b{% else %}#4f46e5{% endif %};
+          transition:width 0.3s;"></div>
+      </div>
+      <div style="font-size:0.8em;color:#888;margin-top:2px;">남은 횟수: {{ 500 - gemini_today.request_count }}회</div>
+    </div>
+    <!-- 토큰 사용량 -->
+    <div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+        <span style="font-size:0.9em;color:#444;">토큰 사용량</span>
+        <span style="font-size:0.9em;font-weight:600;">
+          {{ "{:,}".format(gemini_today.total_tokens) }} / 1,000,000
+        </span>
+      </div>
+      {% set tok_pct = [(gemini_today.total_tokens / 1000000 * 100), 100] | min %}
+      <div style="background:#e2e8f0;border-radius:4px;height:10px;">
+        <div style="width:{{ tok_pct }}%;height:100%;border-radius:4px;
+          background:{% if tok_pct >= 90 %}#ef4444{% elif tok_pct >= 70 %}#f59e0b{% else %}#10b981{% endif %};
+          transition:width 0.3s;"></div>
+      </div>
+      <div style="font-size:0.8em;color:#888;margin-top:2px;">남은 토큰: {{ "{:,}".format(1000000 - gemini_today.total_tokens) }}</div>
+    </div>
+  </div>
+</div>
+
 <!-- 통계 카드 -->
 <div class="stats-grid">
   <div class="stat-card">

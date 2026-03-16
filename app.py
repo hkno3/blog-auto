@@ -5,7 +5,7 @@ import threading
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 
 from config import get_api_key, set_api_key, get_setting, set_setting
-from database.db import init_db, get_posts, get_logs, add_log
+from database.db import init_db, get_posts, get_logs, add_log, get_gemini_usage
 from modules.keyword_fetcher import get_fresh_keywords
 from modules.blogger_uploader import check_auth_status
 from modules.scheduler import run_single_post, run_batch
@@ -30,7 +30,16 @@ def index():
         "published": sum(1 for p in posts if p["status"] == "published"),
         "failed": sum(1 for p in posts if p["status"] == "failed"),
     }
-    return render_template("index.html", posts=posts, logs=logs, auth=auth, stats=stats)
+    usage_list = get_gemini_usage(days=1)
+    today_usage = usage_list[0] if usage_list else {"request_count": 0, "total_tokens": 0}
+    return render_template("index.html", posts=posts, logs=logs, auth=auth, stats=stats,
+                           gemini_today=today_usage)
+
+
+@app.route("/api/gemini-usage")
+def api_gemini_usage():
+    usage = get_gemini_usage(days=7)
+    return jsonify({"usage": usage})
 
 
 # ─── 글 생성 (즉시 실행) ──────────────────────────────
