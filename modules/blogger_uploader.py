@@ -95,7 +95,7 @@ def publish_post(
         if scheduled_at:
             body["published"] = scheduled_at
 
-        is_draft_mode = is_draft or bool(scheduled_at)
+        is_draft_mode = is_draft
         result = service.posts().insert(
             blogId=blog_id,
             body=body,
