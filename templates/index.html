@@ -96,9 +96,10 @@
 
 <!-- 최근 글 목록 -->
 <div class="panel">
-  <h2>최근 발행 글</h2>
-  <table class="data-table">
-    <thead>
+  <h2>최근 발행 글 <span style="font-size:0.85em;color:#666;font-weight:normal;">({{ posts|length }}개)</span></h2>
+  <div style="{% if posts|length > 30 %}max-height:600px;overflow-y:auto;{% endif %}border:1px solid #e2e8f0;border-radius:6px;">
+  <table class="data-table" style="margin:0;border:none;">
+    <thead style="position:sticky;top:0;background:#f8fafc;z-index:1;">
       <tr>
         <th>키워드</th>
         <th>제목</th>
@@ -126,6 +127,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
 </div>
 
 <!-- 최근 로그 -->
