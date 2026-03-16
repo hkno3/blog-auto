@@ -22,13 +22,13 @@ init_db()
 
 @app.route("/")
 def index():
-    posts = get_posts(20)
+    posts = get_posts(300)
     logs = get_logs(10)
     auth = check_auth_status()
     stats = {
-        "total": len(get_posts(1000)),
-        "published": sum(1 for p in get_posts(1000) if p["status"] == "published"),
-        "failed": sum(1 for p in get_posts(1000) if p["status"] == "failed"),
+        "total": len(posts),
+        "published": sum(1 for p in posts if p["status"] == "published"),
+        "failed": sum(1 for p in posts if p["status"] == "failed"),
     }
     return render_template("index.html", posts=posts, logs=logs, auth=auth, stats=stats)
 
