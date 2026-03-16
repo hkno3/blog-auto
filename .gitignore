@@ -6,6 +6,9 @@ __pycache__/
 # Secret encryption key (do not commit)
 .secret.key
 
+# API 키 설정 파일 (사용자별 다름 - 추적 안 함)
+config.json
+
 # Virtual environments
 venv/
 .env
