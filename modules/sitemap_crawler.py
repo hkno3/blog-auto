@@ -1,34 +1,34 @@
 """
-Sitemap 크롤링 및 외부 링크 삽입 모듈
-- bodyandwell.com / bizachieve.com sitemap 파싱
+외부 링크 삽입 모듈
+- RSS Feed 파싱 (sitemap 대신 - 더 단순하고 최신 글 제공)
 - 글 문단과 유사한 주제의 링크 자동 삽입
-- 하루 1회 캐싱
+- 6시간 캐싱 + 상위 결과에서 랜덤 선택으로 다양성 확보
 """
 import re
-import sqlite3
+import random
 import requests
 from datetime import datetime, timedelta
-from urllib.parse import unquote
 from bs4 import BeautifulSoup
 from database.db import get_conn, add_log
 
 TARGET_SITES = [
     {
         "name": "bodyandwell",
-        "sitemap": "https://bodyandwell.com/sitemap_index.xml",
+        "feed": "https://bodyandwell.com/feed",
     },
     {
         "name": "bizachieve",
-        "sitemap": "https://bizachieve.com/sitemap_index.xml",
+        "feed": "https://bizachieve.com/feed",
     },
 ]
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; BlogAutoBot/1.0)"}
+CACHE_HOURS = 6  # 6시간마다 갱신 (24시간→6시간으로 단축)
 
 
 # ─── 캐시 ──────────────────────────────────────────────
 
-def _is_cache_valid(site: str, max_age_hours: int = 24) -> bool:
+def _is_cache_valid(site: str) -> bool:
     conn = get_conn()
     row = conn.execute(
         """SELECT cached_at FROM sitemap_cache
@@ -39,7 +39,7 @@ def _is_cache_valid(site: str, max_age_hours: int = 24) -> bool:
     if not row:
         return False
     cached_at = datetime.fromisoformat(row["cached_at"])
-    return datetime.now() - cached_at < timedelta(hours=max_age_hours)
+    return datetime.now() - cached_at < timedelta(hours=CACHE_HOURS)
 
 
 def _save_cache(site: str, entries: list[dict]):
@@ -63,86 +63,60 @@ def _load_cache(site: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-# ─── 파싱 ──────────────────────────────────────────────
+# ─── RSS Feed 파싱 ──────────────────────────────────────
 
-def _parse_xml(content: bytes):
-    """BeautifulSoup XML 파싱 - 여러 파서 순차 시도"""
-    for parser in ["lxml-xml", "xml", "lxml", "html.parser"]:
-        try:
-            return BeautifulSoup(content, parser)
-        except Exception:
-            continue
-    return BeautifulSoup(content, "html.parser")
-
-
-def _parse_sitemap_index(sitemap_url: str) -> list[str]:
-    """sitemap_index.xml에서 하위 sitemap URL 추출"""
+def _fetch_feed(feed_url: str) -> list[dict]:
+    """RSS feed에서 글 목록 파싱"""
     try:
-        resp = requests.get(sitemap_url, headers=HEADERS, timeout=15)
+        resp = requests.get(feed_url, headers=HEADERS, timeout=15)
         resp.raise_for_status()
-        soup = _parse_xml(resp.content)
-        locs = [loc.get_text().strip() for loc in soup.find_all("loc") if loc.get_text().strip()]
-        add_log(f"sitemap_index 파싱: {len(locs)}개 하위 sitemap ({sitemap_url})")
-        return locs
-    except Exception as e:
-        add_log(f"sitemap_index 파싱 실패 ({sitemap_url}): {e}", "ERROR")
-        return []
+        soup = BeautifulSoup(resp.content, "xml")
 
+        # xml 파서 실패 시 lxml로 재시도
+        if not soup.find("item"):
+            soup = BeautifulSoup(resp.content, "lxml")
 
-def _parse_sitemap(sitemap_url: str) -> list[dict]:
-    """개별 sitemap.xml에서 URL + title 추출"""
-    try:
-        resp = requests.get(sitemap_url, headers=HEADERS, timeout=15)
-        resp.raise_for_status()
-        soup = _parse_xml(resp.content)
         entries = []
-        for url_tag in soup.find_all("url"):
-            loc = url_tag.find("loc")
-            if not loc:
-                continue
-            url = loc.get_text().strip()
-            if not url:
-                continue
-            # title 여러 태그명 시도
-            title_tag = (url_tag.find("news:title") or url_tag.find("title")
-                         or url_tag.find("image:title"))
-            title = title_tag.get_text().strip() if title_tag else ""
+        for item in soup.find_all("item"):
+            title_tag = item.find("title")
+            link_tag = item.find("link")
+            desc_tag = item.find("description")
 
-            # title 없으면 URL에서 slug 추출 + URL 디코딩
-            if not title:
-                slug = url.rstrip("/").split("/")[-1]
-                slug = unquote(slug)  # %eb%b3%b8... → 한글 변환
-                title = slug.replace("-", " ").replace("_", " ").strip()
+            title = title_tag.get_text(strip=True) if title_tag else ""
+            # <link> 태그가 비어있을 경우 next_sibling으로 URL 추출
+            if link_tag:
+                url = link_tag.get_text(strip=True) or (link_tag.next_sibling or "").strip()
+            else:
+                url = ""
+            description = ""
+            if desc_tag:
+                desc_text = BeautifulSoup(desc_tag.get_text(), "html.parser").get_text()
+                description = desc_text[:200].strip()
 
-            # 제목이 도메인명이거나 너무 짧으면 스킵
-            if not title or len(title) < 4 or title in ("bodyandwell.com", "bizachieve.com"):
-                continue
+            if url and title and len(title) > 4:
+                entries.append({"url": url, "title": title, "description": description})
 
-            entries.append({"url": url, "title": title, "description": ""})
         return entries
     except Exception as e:
-        add_log(f"sitemap 파싱 실패 ({sitemap_url}): {e}", "WARN")
+        add_log(f"Feed 파싱 실패 ({feed_url}): {e}", "WARN")
         return []
 
 
-def refresh_sitemap_cache(force: bool = False):
-    """전체 사이트 sitemap 캐시 갱신"""
+def refresh_feed_cache(force: bool = False):
+    """전체 사이트 feed 캐시 갱신"""
     for site_info in TARGET_SITES:
         name = site_info["name"]
         if not force and _is_cache_valid(name):
-            add_log(f"sitemap 캐시 유효 - 스킵: {name}")
+            add_log(f"feed 캐시 유효 - 스킵: {name}")
             continue
 
-        add_log(f"sitemap 크롤링 시작: {name}")
-        sub_sitemaps = _parse_sitemap_index(site_info["sitemap"])
-
-        all_entries = []
-        for sub_url in sub_sitemaps[:10]:  # 최대 10개 하위 sitemap
-            entries = _parse_sitemap(sub_url)
-            all_entries += entries
-
-        _save_cache(name, all_entries)
-        add_log(f"sitemap 캐시 저장 완료: {name} ({len(all_entries)}개)")
+        add_log(f"feed 크롤링 시작: {name}")
+        entries = _fetch_feed(site_info["feed"])
+        if entries:
+            _save_cache(name, entries)
+            add_log(f"feed 캐시 저장: {name} ({len(entries)}개)")
+        else:
+            add_log(f"feed 데이터 없음: {name}", "WARN")
 
 
 # ─── 유사도 & 링크 삽입 ────────────────────────────────
@@ -157,10 +131,7 @@ def _similarity_score(text1: str, text2: str) -> float:
 
 
 def find_related_links(paragraph: str, top_n: int = 2) -> list[dict]:
-    """
-    문단 내용과 유사한 외부 링크 찾기
-    반환: [{url, title, site, score}]
-    """
+    """문단 내용과 유사한 외부 링크 찾기"""
     all_entries = []
     for site_info in TARGET_SITES:
         entries = _load_cache(site_info["name"])
@@ -184,7 +155,7 @@ def insert_external_links(content: str, keyword: str = "") -> str:
     1) 본문 각 문단에 유사 외부 링크 삽입 (있을 때)
     2) 글 끝에 '함께 보면 좋은 글' 섹션 무조건 추가 (3개)
     """
-    refresh_sitemap_cache(force=True)  # 캐시 강제 갱신 (깨진 제목 재수집)
+    refresh_feed_cache()  # 캐시 만료 시에만 갱신
 
     soup = BeautifulSoup(content, "html.parser")
 
@@ -211,7 +182,6 @@ def insert_external_links(content: str, keyword: str = "") -> str:
 
     # ── 글 끝 '함께 보면 좋은 글' 무조건 추가 ──────────
     related = _get_related_links_for_footer(keyword, used_urls, count=3)
-    # 캐시 없어도 폴백 링크로 무조건 삽입
     footer_html = _build_related_section(related)
     footer_soup = BeautifulSoup(footer_html, "html.parser")
     soup.append(footer_soup)
@@ -221,7 +191,7 @@ def insert_external_links(content: str, keyword: str = "") -> str:
 
 
 def _get_related_links_for_footer(keyword: str, exclude_urls: set, count: int = 3) -> list[dict]:
-    """하단 섹션용 링크 - 캐시에서 유사도 기준으로 선택, 캐시 없으면 강제 크롤링"""
+    """하단 섹션용 링크 - 유사도 상위에서 랜덤 선택으로 다양성 확보"""
     all_entries = []
     for site_info in TARGET_SITES:
         entries = _load_cache(site_info["name"])
@@ -229,19 +199,18 @@ def _get_related_links_for_footer(keyword: str, exclude_urls: set, count: int = 
             e["site"] = site_info["name"]
         all_entries += entries
 
-    # 캐시 없으면 지금 바로 크롤링
+    # 캐시 없으면 즉시 크롤링
     if not all_entries:
-        add_log("sitemap 캐시 없음 - 즉시 크롤링 시작")
-        refresh_sitemap_cache(force=True)
+        add_log("feed 캐시 없음 - 즉시 크롤링")
+        refresh_feed_cache(force=True)
         for site_info in TARGET_SITES:
             entries = _load_cache(site_info["name"])
             for e in entries:
                 e["site"] = site_info["name"]
             all_entries += entries
 
-    # 그래도 없으면 빈 리스트 (섹션 빌더에서 처리)
     if not all_entries:
-        add_log("sitemap 크롤링 실패 - 링크 없음", "WARN")
+        add_log("feed 크롤링 실패 - 링크 없음", "WARN")
         return []
 
     # 유사도 점수 계산
@@ -254,35 +223,38 @@ def _get_related_links_for_footer(keyword: str, exclude_urls: set, count: int = 
 
     scored.sort(key=lambda x: x["score"], reverse=True)
 
-    # 사이트별 균형있게 선택 (bodyandwell 1~2개 + bizachieve 1~2개)
-    result = []
-    sites_seen = {}
-    for item in scored:
-        site = item["site"]
-        sites_seen[site] = sites_seen.get(site, 0)
-        if sites_seen[site] < 2:
-            result.append(item)
-            sites_seen[site] += 1
-        if len(result) >= count:
-            break
+    # 상위 10개 중 랜덤 선택 (매번 다른 링크 노출)
+    pool = scored[:10]
+    if len(pool) <= count:
+        candidates = pool
+    else:
+        # 사이트별 균형: bodyandwell/bizachieve 각각 풀 분리 후 랜덤
+        pool_by_site = {}
+        for item in pool:
+            site = item["site"]
+            pool_by_site.setdefault(site, []).append(item)
 
-    # 부족하면 점수 무관하게 채움
-    if len(result) < count:
-        for item in scored:
-            if item not in result:
-                result.append(item)
-            if len(result) >= count:
+        candidates = []
+        site_names = list(pool_by_site.keys())
+        random.shuffle(site_names)
+        for site in site_names:
+            site_pool = pool_by_site[site]
+            pick = random.choice(site_pool)
+            candidates.append(pick)
+            if len(candidates) >= count:
                 break
 
-    return result[:count]
+        # 부족하면 나머지에서 보충
+        if len(candidates) < count:
+            remaining = [x for x in pool if x not in candidates]
+            random.shuffle(remaining)
+            candidates += remaining[:count - len(candidates)]
+
+    return candidates[:count]
 
 
 def _build_related_section(links: list[dict]) -> str:
-    """함께 보면 좋은 글 HTML 섹션 생성 - 링크 없으면 각 사이트 최신 글 직접 크롤"""
-    # 링크가 없으면 각 사이트에서 첫 번째 글 직접 가져오기
-    if not links:
-        links = _crawl_latest_from_each_site(count=3)
-
+    """함께 보면 좋은 글 HTML 섹션 생성"""
     if not links:
         add_log("외부 링크를 가져올 수 없음", "WARN")
         return ""
@@ -293,8 +265,6 @@ def _build_related_section(links: list[dict]) -> str:
         url = link.get("url", "")
         if not url:
             continue
-        site = link.get("site", "")
-        site_label = "BodyAndWell" if "bodyandwell" in site else "BizAchieve"
         items_html += f"""
         <li style="margin-bottom:8px;">
           <a href="{url}" target="_blank" rel="noopener noreferrer"
@@ -315,33 +285,6 @@ def _build_related_section(links: list[dict]) -> str:
 </div>"""
 
 
-def _crawl_latest_from_each_site(count: int = 3) -> list[dict]:
-    """각 사이트 sitemap에서 최신 글 직접 크롤링"""
-    results = []
-    per_site = max(1, count)
-
-    for site_info in TARGET_SITES:
-        try:
-            sub_sitemaps = _parse_sitemap_index(site_info["sitemap"])
-            if not sub_sitemaps:
-                add_log(f"하위 sitemap 없음: {site_info['name']}", "WARN")
-                continue
-
-            # 여러 하위 sitemap 시도
-            for sub_url in sub_sitemaps[:3]:
-                entries = _parse_sitemap(sub_url)
-                found = 0
-                for e in entries:
-                    if e.get("url") and e.get("title"):
-                        results.append({**e, "site": site_info["name"]})
-                        found += 1
-                    if found >= per_site:
-                        break
-                if found > 0:
-                    break  # 글 찾았으면 다음 사이트로
-
-        except Exception as ex:
-            add_log(f"직접 크롤링 실패 ({site_info['name']}): {ex}", "WARN")
-
-    add_log(f"직접 크롤링 결과: {len(results)}개")
-    return results[:count]
+# 하위 호환성 유지
+def refresh_sitemap_cache(force: bool = False):
+    refresh_feed_cache(force=force)
