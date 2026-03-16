@@ -27,7 +27,8 @@
           {{ gemini_today.request_count }} / 500
         </span>
       </div>
-      {% set req_pct = [(gemini_today.request_count / 500 * 100), 100] | min %}
+      {% set req_pct = gemini_today.request_count / 500 * 100 %}
+      {% if req_pct > 100 %}{% set req_pct = 100 %}{% endif %}
       <div style="background:#e2e8f0;border-radius:4px;height:10px;">
         <div style="width:{{ req_pct }}%;height:100%;border-radius:4px;
           background:{% if req_pct >= 90 %}#ef4444{% elif req_pct >= 70 %}#f59e0b{% else %}#4f46e5{% endif %};
@@ -40,16 +41,17 @@
       <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
         <span style="font-size:0.9em;color:#444;">토큰 사용량</span>
         <span style="font-size:0.9em;font-weight:600;">
-          {{ "{:,}".format(gemini_today.total_tokens) }} / 1,000,000
+          {{ gemini_today.total_tokens | int }} / 1,000,000
         </span>
       </div>
-      {% set tok_pct = [(gemini_today.total_tokens / 1000000 * 100), 100] | min %}
+      {% set tok_pct = gemini_today.total_tokens / 1000000 * 100 %}
+      {% if tok_pct > 100 %}{% set tok_pct = 100 %}{% endif %}
       <div style="background:#e2e8f0;border-radius:4px;height:10px;">
         <div style="width:{{ tok_pct }}%;height:100%;border-radius:4px;
           background:{% if tok_pct >= 90 %}#ef4444{% elif tok_pct >= 70 %}#f59e0b{% else %}#10b981{% endif %};
           transition:width 0.3s;"></div>
       </div>
-      <div style="font-size:0.8em;color:#888;margin-top:2px;">남은 토큰: {{ "{:,}".format(1000000 - gemini_today.total_tokens) }}</div>
+      <div style="font-size:0.8em;color:#888;margin-top:2px;">남은 토큰: {{ (1000000 - gemini_today.total_tokens) | int }}</div>
     </div>
   </div>
 </div>
