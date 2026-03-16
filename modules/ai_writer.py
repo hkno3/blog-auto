@@ -5,7 +5,7 @@ SEO 최적화 구조로 글 생성
 import re
 from google import genai
 from config import get_api_key, get_setting
-from database.db import add_log
+from database.db import add_log, record_gemini_usage
 
 
 def _get_client():
@@ -63,6 +63,15 @@ def generate_post(keyword: str, style: str = "") -> dict:
             model="gemini-2.5-flash", contents=prompt
         )
         text = response.text
+
+        # 토큰 사용량 기록
+        usage = getattr(response, "usage_metadata", None)
+        if usage:
+            pt = getattr(usage, "prompt_token_count", 0) or 0
+            ct = getattr(usage, "candidates_token_count", 0) or 0
+            tt = getattr(usage, "total_token_count", 0) or (pt + ct)
+            record_gemini_usage(pt, ct, tt)
+            add_log(f"Gemini 토큰 사용: 입력 {pt} + 출력 {ct} = {tt}개")
 
         result = _parse_response(text, keyword)
         _validate_content(result, keyword)

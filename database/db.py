@@ -61,6 +61,19 @@ def init_db():
         )
     """)
 
+    # Gemini API 사용량 추적
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS gemini_usage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT NOT NULL,
+            request_count INTEGER DEFAULT 0,
+            prompt_tokens INTEGER DEFAULT 0,
+            completion_tokens INTEGER DEFAULT 0,
+            total_tokens INTEGER DEFAULT 0,
+            UNIQUE(date)
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -148,6 +161,36 @@ def get_posts(limit: int = 50):
     rows = conn.execute(
         "SELECT * FROM posts ORDER BY created_at DESC LIMIT ?", (limit,)
     ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def record_gemini_usage(prompt_tokens: int, completion_tokens: int, total_tokens: int):
+    """Gemini API 사용량 기록 (날짜별 누적)"""
+    today = datetime.now().strftime("%Y-%m-%d")
+    conn = get_conn()
+    conn.execute("""
+        INSERT INTO gemini_usage (date, request_count, prompt_tokens, completion_tokens, total_tokens)
+        VALUES (?, 1, ?, ?, ?)
+        ON CONFLICT(date) DO UPDATE SET
+            request_count = request_count + 1,
+            prompt_tokens = prompt_tokens + excluded.prompt_tokens,
+            completion_tokens = completion_tokens + excluded.completion_tokens,
+            total_tokens = total_tokens + excluded.total_tokens
+    """, (today, prompt_tokens, completion_tokens, total_tokens))
+    conn.commit()
+    conn.close()
+
+
+def get_gemini_usage(days: int = 7) -> list[dict]:
+    """최근 N일 Gemini 사용량 조회"""
+    conn = get_conn()
+    rows = conn.execute("""
+        SELECT date, request_count, prompt_tokens, completion_tokens, total_tokens
+        FROM gemini_usage
+        WHERE date >= date('now', ?, 'localtime')
+        ORDER BY date DESC
+    """, (f"-{days} days",)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
