@@ -206,7 +206,12 @@ def get_fresh_keywords(count: int = 20, source: str = "both") -> list[str]:
     combined = []
 
     def _add(kw):
-        if kw and kw not in combined and not is_keyword_used(kw, days=30):
+        if not kw:
+            return
+        word_count = len(kw.split())
+        if word_count < 3 or word_count > 4:
+            return
+        if kw not in combined and not is_keyword_used(kw, days=30):
             combined.append(kw)
 
     for kw in rss_keywords:
