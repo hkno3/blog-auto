@@ -280,42 +280,47 @@ def estimate_cpc(keyword: str, search_vol: int) -> str:
 # ─── SEO 제목 생성 ────────────────────────────────────
 
 TITLE_TEMPLATES = [
-    # 이득
+    # 이득 — "~로 혜택/비용 아끼기"
     "{kw} 혜택 받는 3가지 핵심 방법",
-    "{kw}로 비용 아끼는 실전 팁",
-    # 손실 예방
-    "실패 없는 {kw} 핵심 정리 5가지",
-    "주의해야 할 {kw} 체크리스트",
-    "미리 체크하는 {kw} 가이드",
-    # 시간 효율
-    "5분 만에 배우는 {kw} 단계별 정리",
-    "간단하게 끝내는 {kw} 완벽 가이드",
-    # 희소성
-    "{kw} 비교 분석 총정리",
-    "잘 모르는 {kw}의 차이점 3가지",
-    "{kw} 핵심만 정리한 노하우",
+    "{kw}로 비용 아끼는 5가지 팁",
+    "{kw} 나만 몰랐던 절약 꿀팁 7가지",
+    # 손실 — "모르면 손해, 나만 몰랐던"
+    "{kw} 모르면 손해보는 핵심 7가지",
+    "{kw} 나만 모르던 실수 5가지 정리",
+    # 손실 예방 — "실패 없이, 미리 체크"
+    "{kw} 실패 없이 끝내는 5단계 가이드",
+    "{kw} 미리 체크해야 할 3가지 핵심",
+    # 시간 효율 — "3분, 7일, 단계별"
+    "{kw} 3분 만에 끝내는 단계별 정리",
+    "{kw} 단 7일 만에 바꾸는 실전 방법",
+    # 희소성/정보 — "핵심 정리, 비교 분석, 차이점"
+    "{kw} 핵심만 정리한 비교 분석",
+    "{kw} 잘 모르는 차이점 3가지 정리",
+    "{kw} 가성비 조합으로 비용 줄이는 법",
 ]
 
 
 def generate_seo_title(keyword: str) -> str:
     """
     SEO 제목 생성 (규칙 기반)
-    - 키워드를 맨 앞에 배치
-    - 24~30자
-    - 숫자 포함
-    - 특수문자 금지
+    - 포커스 키워드를 맨 앞 15자 이내에 배치
+    - 24~30자 (모바일 최적화)
+    - 숫자 포함 권장
+    - 특수문자·홍보성 단어 금지
     """
+    BANNED = ["무료", "공짜", "할인", "이벤트", "강추", "1위"]
     for template in TITLE_TEMPLATES:
         title = template.replace("{kw}", keyword)
-        # 특수문자 제거
         title = re.sub(r"[^\w\s가-힣]", "", title).strip()
         title_len = len(title)
-        if 20 <= title_len <= 35 and keyword in title:
+        if (24 <= title_len <= 32
+                and keyword in title
+                and not any(b in title for b in BANNED)):
             return title
 
-    # 폴백: 간단한 제목
-    title = f"{keyword} 핵심 정리 가이드"
-    return title[:35]
+    # 폴백
+    title = re.sub(r"[^\w\s가-힣]", "", f"{keyword} 핵심 정리 가이드").strip()
+    return title[:32]
 
 
 def _describe_source(keyword: str, original: str) -> str:
