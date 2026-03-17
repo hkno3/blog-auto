@@ -86,6 +86,9 @@
   </div>
 
   <!-- 번호 키워드 칩 -->
+  <div id="keyword-list-header" style="display:none; justify-content: flex-end; margin-bottom: 4px;">
+    <button class="btn-clear-all" onclick="clearAllKeywords()">전체 삭제</button>
+  </div>
   <div id="keyword-list" class="keyword-chips" style="display:none;"></div>
   <div id="selected-info" class="selected-info" style="display:none;">
     선택된 키워드: <span id="selected-count">0</span>개
@@ -200,19 +203,69 @@ let selectedKeywords = [];
 async function loadKeywords() {
   showToast('키워드 불러오는 중...');
   const container = document.getElementById('keyword-list');
-  container.innerHTML = '<span style="color:#64748b;font-size:13px;">RSS 수집 + 서브키워드 조합 중...</span>';
+  const header = document.getElementById('keyword-list-header');
+
+  // 로딩 표시 (기존 칩 유지)
+  const loadingEl = document.createElement('span');
+  loadingEl.id = 'kw-loading';
+  loadingEl.style.cssText = 'color:#64748b;font-size:13px;align-self:center;';
+  loadingEl.textContent = 'RSS 수집 + 서브키워드 조합 중...';
+  container.appendChild(loadingEl);
   container.style.display = 'flex';
-  selectedKeywords = [];
-  updateSelectedInfo();
+  header.style.display = 'flex';
 
   const res = await fetch('/api/keywords?source=both');
   const data = await res.json();
 
-  container.innerHTML = data.keywords.map((kw, i) =>
-    `<span class="chip" onclick="toggleKeyword(this, '${kw.replace(/'/g,"\\'")}')">
-      <span class="chip-num">${i + 1}</span>${kw}
-    </span>`
-  ).join('');
+  // 로딩 표시 제거
+  const loading = document.getElementById('kw-loading');
+  if (loading) loading.remove();
+
+  // 이미 있는 키워드는 중복 추가 안 함
+  const existingKws = new Set(
+    [...container.querySelectorAll('.chip')].map(c => c.dataset.kw)
+  );
+
+  const newHtml = data.keywords
+    .filter(kw => !existingKws.has(kw))
+    .map(kw =>
+      `<span class="chip" data-kw="${kw.replace(/"/g,'&quot;')}" onclick="toggleKeyword(this, '${kw.replace(/'/g,"\\'")}')">
+        <span class="chip-num"></span>${kw}<button class="chip-del" onclick="event.stopPropagation();deleteKeyword(this,'${kw.replace(/'/g,"\\'")}')">×</button>
+      </span>`
+    ).join('');
+
+  container.insertAdjacentHTML('beforeend', newHtml);
+  renumberChips();
+}
+
+function renumberChips() {
+  document.querySelectorAll('#keyword-list .chip').forEach((c, i) => {
+    c.querySelector('.chip-num').textContent = i + 1;
+  });
+}
+
+function deleteKeyword(btnEl, kw) {
+  const chip = btnEl.closest('.chip');
+  chip.remove();
+  selectedKeywords = selectedKeywords.filter(k => k !== kw);
+  renumberChips();
+  updateSelectedInfo();
+  const container = document.getElementById('keyword-list');
+  const header = document.getElementById('keyword-list-header');
+  if (!container.querySelector('.chip')) {
+    container.style.display = 'none';
+    header.style.display = 'none';
+  }
+}
+
+function clearAllKeywords() {
+  const container = document.getElementById('keyword-list');
+  const header = document.getElementById('keyword-list-header');
+  container.innerHTML = '';
+  container.style.display = 'none';
+  header.style.display = 'none';
+  selectedKeywords = [];
+  updateSelectedInfo();
 }
 
 function toggleKeyword(el, kw) {

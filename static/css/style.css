@@ -375,6 +375,19 @@ small { color: var(--text-muted); font-size: 12px; display: block; margin-top: 4
   margin-left: auto;
 }
 .btn-clear:hover { background: #e0e7ff; }
+.chip-del {
+  background: none; border: none; color: inherit; opacity: 0.5;
+  cursor: pointer; padding: 0 0 0 6px; font-size: 14px; line-height: 1;
+  vertical-align: middle;
+}
+.chip-del:hover { opacity: 1; }
+.chip.selected .chip-del { opacity: 0.7; }
+.chip.selected .chip-del:hover { opacity: 1; }
+.btn-clear-all {
+  background: none; border: 1px solid #fca5a5; color: #ef4444;
+  padding: 3px 10px; border-radius: 4px; font-size: 12px; cursor: pointer;
+}
+.btn-clear-all:hover { background: #fee2e2; }
 
 /* ─── 실행 버튼 ──────────────────────────────────────── */
 .run-btns { display: flex; gap: 12px; margin: 12px 0; }
