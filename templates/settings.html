@@ -52,7 +52,9 @@
     <div class="input-with-btn">
       <input type="password" id="pexels_key" value="{{ config.pexels_key }}"
              placeholder="Pexels API Key">
+      <button class="btn-secondary" onclick="testApi('pexels')">연결 테스트</button>
     </div>
+    <div id="pexels-result" class="api-result"></div>
     <small>
       <a href="https://www.pexels.com/api/" target="_blank">
         👉 Pexels API 키 발급 (무료)

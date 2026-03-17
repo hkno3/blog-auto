@@ -228,6 +228,24 @@ def test_api():
         except Exception as e:
             results["unsplash"] = {"ok": False, "msg": str(e)}
 
+    if api_name in ("pexels", "all"):
+        try:
+            import requests as req
+            key = get_api_key("pexels")
+            if key:
+                r = req.get(
+                    "https://api.pexels.com/v1/search",
+                    params={"query": "test", "per_page": 1},
+                    headers={"Authorization": key},
+                    timeout=5,
+                )
+                r.raise_for_status()
+                results["pexels"] = {"ok": True, "msg": "연결 성공"}
+            else:
+                results["pexels"] = {"ok": False, "msg": "API 키 없음"}
+        except Exception as e:
+            results["pexels"] = {"ok": False, "msg": str(e)}
+
     if api_name in ("pixabay", "all"):
         try:
             import requests as req
