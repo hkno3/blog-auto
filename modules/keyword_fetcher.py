@@ -184,7 +184,7 @@ def fetch_all_rss_keywords(max_total: int = 30) -> list[str]:
     for url in ALL_RSS_FEEDS:
         if len(keywords) >= max_total:
             break
-        titles = _parse_rss(url, max_items=2)
+        titles = _parse_rss(url, max_items=3)
         for kw in titles:
             if kw not in keywords:
                 keywords.append(kw)
@@ -197,7 +197,7 @@ def get_fresh_keywords(count: int = 20, source: str = "both") -> list[str]:
     RSS(24h) + 네이버 자동완성어 + 네이버 연관검색어 + 구글 자동완성어 조합
     반환: [키워드, ...]
     """
-    rss_keywords = fetch_all_rss_keywords(max_total=15)
+    rss_keywords = fetch_all_rss_keywords(max_total=50)
 
     if not rss_keywords:
         add_log("RSS 24h 이내 키워드 없음 - 기본 키워드 사용", "WARN")

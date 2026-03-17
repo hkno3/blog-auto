@@ -99,7 +99,7 @@ def run_scheduled():
 @app.route("/api/keywords")
 def api_keywords():
     source = request.args.get("source", "google")
-    keywords = get_fresh_keywords(count=10, source=source)
+    keywords = get_fresh_keywords(count=100, source=source)
     return jsonify({"keywords": keywords})
 
 
