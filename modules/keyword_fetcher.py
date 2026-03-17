@@ -9,7 +9,7 @@ import email.utils
 import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
-from database.db import add_log, is_keyword_used
+from database.db import add_log
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
@@ -211,7 +211,7 @@ def get_fresh_keywords(count: int = 20, source: str = "both") -> list[str]:
         word_count = len(kw.split())
         if word_count < 3 or word_count > 4:
             return
-        if kw not in combined and not is_keyword_used(kw, days=30):
+        if kw not in combined:
             combined.append(kw)
 
     for kw in rss_keywords:
