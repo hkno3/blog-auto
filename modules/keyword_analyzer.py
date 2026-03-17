@@ -1,15 +1,17 @@
 """
 수익형 키워드 분석 모듈
-RSS 수집 → 네이버 자동완성 → 검색광고 API(검색량) → 블로그 검색(문서량)
-→ 경쟁도 계산 → SEO 제목 생성
+RSS 수집(24h) → 네이버 자동완성어/연관검색어 + 구글 자동완성어
+→ 검색광고 API(검색량) → 블로그 검색(문서량) → 경쟁도 계산 → SEO 제목 생성
 """
 import hashlib
 import hmac
 import base64
 import time
 import re
+import email.utils
 import requests
 import xml.etree.ElementTree as ET
+from datetime import datetime, timezone, timedelta
 from config import get_api_key
 from database.db import add_log
 
@@ -40,9 +42,10 @@ POLICY_RSS = [
 
 # ─── RSS 수집 ─────────────────────────────────────────
 
-def fetch_rss_keywords(feeds: list[str], max_per_feed: int = 5) -> list[str]:
-    """RSS 피드에서 최신 키워드 추출"""
+def fetch_rss_keywords(feeds: list[str], max_per_feed: int = 5, hours: int = 24) -> list[str]:
+    """RSS 피드에서 24시간 이내 최신 키워드 추출"""
     keywords = []
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
     for url in feeds:
         try:
             resp = requests.get(url, timeout=8, headers=HEADERS)
@@ -55,11 +58,21 @@ def fetch_rss_keywords(feeds: list[str], max_per_feed: int = 5) -> list[str]:
 
             count = 0
             for item in root.findall(".//item"):
+                # pubDate 체크 — 24시간 이전 기사 스킵
+                pub_tag = item.find("pubDate")
+                if pub_tag is not None and pub_tag.text:
+                    try:
+                        pub_dt = email.utils.parsedate_to_datetime(pub_tag.text)
+                        if pub_dt.tzinfo is None:
+                            pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+                        if pub_dt < cutoff:
+                            continue
+                    except Exception:
+                        pass
+
                 title_tag = item.find("title")
                 if title_tag is not None and title_tag.text:
-                    title = title_tag.text.strip()
-                    # 제목에서 핵심 키워드 추출 (괄호/특수문자 제거, 앞 20자)
-                    kw = re.sub(r"[^\w\s가-힣]", " ", title).strip()[:30]
+                    kw = re.sub(r"[^\w\s가-힣]", " ", title_tag.text).strip()[:30]
                     kw = re.sub(r"\s+", " ", kw).strip()
                     if kw and len(kw) >= 4 and kw not in keywords:
                         keywords.append(kw)
@@ -74,21 +87,54 @@ def fetch_rss_keywords(feeds: list[str], max_per_feed: int = 5) -> list[str]:
 
 # ─── 네이버 자동완성 ──────────────────────────────────
 
-def get_naver_autocomplete(keyword: str) -> list[str]:
-    """네이버 자동완성 키워드 수집"""
+def get_naver_autocomplete(keyword: str, max_count: int = 5) -> list[str]:
+    """네이버 자동완성어 (검색창 입력 시 드롭다운 추천어)"""
     try:
         resp = requests.get(
             "https://ac.search.naver.com/nx/ac",
             params={"q": keyword, "st": "100", "r_format": "json",
                     "r_enc": "UTF-8", "q_enc": "UTF-8", "from": "nx"},
-            timeout=5,
-            headers=HEADERS,
+            timeout=5, headers=HEADERS,
         )
         data = resp.json()
         items = data.get("items", [[]])[0]
-        return [item[0] for item in items if item]
+        return [item[0] for item in items[:max_count] if item]
     except Exception as e:
         add_log(f"네이버 자동완성 실패 ({keyword}): {e}", "WARN")
+        return []
+
+
+def get_naver_related(keyword: str, max_count: int = 5) -> list[str]:
+    """네이버 연관검색어 (검색 결과 페이지 확장 키워드)"""
+    try:
+        resp = requests.get(
+            "https://ac.search.naver.com/nx/ac",
+            params={"q": keyword, "st": "111", "r_format": "json",
+                    "r_enc": "UTF-8", "q_enc": "UTF-8"},
+            timeout=5, headers=HEADERS,
+        )
+        data = resp.json()
+        items = data.get("items", [])
+        related = items[1] if len(items) > 1 else []
+        return [item[0] for item in related[:max_count] if item]
+    except Exception as e:
+        add_log(f"네이버 연관검색어 실패 ({keyword}): {e}", "WARN")
+        return []
+
+
+def get_google_autocomplete(keyword: str, max_count: int = 5) -> list[str]:
+    """구글 자동완성어 (질문형/How-to 키워드 포함)"""
+    try:
+        resp = requests.get(
+            "https://suggestqueries.google.com/complete/search",
+            params={"output": "firefox", "hl": "ko", "q": keyword},
+            timeout=5, headers=HEADERS,
+        )
+        data = resp.json()
+        suggestions = data[1] if len(data) > 1 else []
+        return [s for s in suggestions[:max_count] if s and s != keyword]
+    except Exception as e:
+        add_log(f"구글 자동완성 실패 ({keyword}): {e}", "WARN")
         return []
 
 
@@ -298,14 +344,20 @@ def analyze_keywords(mode: str = "health", top_n: int = 5) -> list[dict]:
         add_log("RSS 수집 실패 - 기본 키워드 사용", "WARN")
         rss_keywords = ["건강 식단", "다이어트 방법", "운동 루틴"] if mode == "health" else ["재테크 방법", "부업 추천"]
 
-    # 2. 자동완성으로 확장
+    # 2. 네이버 자동완성어 + 연관검색어 + 구글 자동완성어로 확장
     all_candidates = []
     for rss_kw in rss_keywords[:8]:
-        autocomplete = get_naver_autocomplete(rss_kw)
-        for ac_kw in autocomplete[:5]:
-            all_candidates.append({"keyword": ac_kw, "source": "자동완성어", "original": rss_kw})
-        # 원본도 포함
+        # RSS 원본
         all_candidates.append({"keyword": rss_kw, "source": "RSS 원본", "original": rss_kw})
+        # 1-2-1. 네이버 자동완성어
+        for ac_kw in get_naver_autocomplete(rss_kw, max_count=3):
+            all_candidates.append({"keyword": ac_kw, "source": "네이버 자동완성어", "original": rss_kw})
+        # 1-2-2. 네이버 연관검색어
+        for rel_kw in get_naver_related(rss_kw, max_count=3):
+            all_candidates.append({"keyword": rel_kw, "source": "네이버 연관검색어", "original": rss_kw})
+        # 1-3-1. 구글 자동완성어
+        for g_kw in get_google_autocomplete(rss_kw, max_count=2):
+            all_candidates.append({"keyword": g_kw, "source": "구글 자동완성어", "original": rss_kw})
 
     # 중복 제거
     seen = set()
