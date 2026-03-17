@@ -124,8 +124,10 @@
       </div>
       <div class="form-group">
         <label>글쓰기 말투 / 스타일</label>
-        <textarea id="writing_style" rows="2"
-                  placeholder="예: 친근하고 정보성 있는 블로그 말투">친근하고 정보성 있는 블로그 말투</textarea>
+        <textarea id="writing_style" rows="5"
+                  placeholder="예: 친근하고 정보성 있는 블로그 말투">{{ writing_style }}</textarea>
+        <button type="button" onclick="saveWritingStyle()" style="margin-top:8px;padding:6px 16px;background:#4f46e5;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:0.9em;">저장</button>
+        <span id="style-save-msg" style="margin-left:10px;font-size:0.85em;color:#16a34a;display:none;">저장되었습니다.</span>
       </div>
     </div>
   </details>
@@ -325,6 +327,18 @@ function startLogPolling() {
     if (isAtBottom) container.scrollTop = container.scrollHeight;
   }, 2000);
   setTimeout(() => clearInterval(pollInterval), 300000);
+}
+
+async function saveWritingStyle() {
+  const style = document.getElementById('writing_style').value;
+  const msg = document.getElementById('style-save-msg');
+  await fetch('/settings/save', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({writing_style: style})
+  });
+  msg.style.display = 'inline';
+  setTimeout(() => { msg.style.display = 'none'; }, 2000);
 }
 </script>
 {% endblock %}
