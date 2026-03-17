@@ -44,6 +44,37 @@ ALL_RSS_FEEDS = [
     "https://kormedi.com/category/cardnews/feed/",
     "https://kormedi.com/category/movie/feed/",
     "https://www.mkhealth.co.kr/rss/allArticle.xml",
+    # 종합/시사
+    "https://news.sbs.co.kr/news/TopicRssFeed.do?plink=RSSREADER",
+    "https://www.yna.co.kr/rss/news.xml",
+    "https://www.yna.co.kr/rss/health.xml",
+    "https://www.yna.co.kr/rss/economy.xml",
+    "https://rss.donga.com/total.xml",
+    "https://www.hani.co.kr/rss",
+    "https://www.khan.co.kr/rss/rssdata/total_news.xml",
+    # 경제/비즈
+    "https://www.mk.co.kr/rss/30000001",
+    "https://www.hankyung.com/feed/all-news",
+    "http://rss.edaily.co.kr/edaily_news.xml",
+    "https://biz.heraldcorp.com/rss/google/newsAll",
+    "https://biz.heraldcorp.com/rss/google/economy",
+    "https://biz.heraldcorp.com/rss/google/realestate",
+    "https://biz.heraldcorp.com/rss/google/it",
+    "https://biz.heraldcorp.com/rss/google/culture",
+    # IT
+    "https://feeds.feedburner.com/zdkorea",
+    "https://it.chosun.com/rss/allArticle.xml",
+    # 식품/유통
+    "https://www.thinkfood.co.kr/rss/allArticle.xml",
+    # 보도자료
+    "https://api.newswire.co.kr/rss/all",
+    "https://api.newswire.co.kr/rss/industry/1000",
+    "https://api.newswire.co.kr/rss/industry/900",
+    "https://api.newswire.co.kr/rss/industry/100",
+    "https://api.newswire.co.kr/rss/industry/200",
+    "https://api.newswire.co.kr/rss/industry/1100",
+    # 구글 뉴스
+    "https://news.google.com/rss?hl=ko&gl=KR&ceid=KR:ko",
 ]
 
 FALLBACK_KEYWORDS = [
