@@ -211,8 +211,7 @@ def get_fresh_keywords(count: int = 20, source: str = "both") -> list[str]:
         word_count = len(kw.split())
         if word_count < 3 or word_count > 4:
             return
-        if kw not in combined:
-            combined.append(kw)
+        combined.append(kw)
 
     for kw in rss_keywords:
         _add(kw)
