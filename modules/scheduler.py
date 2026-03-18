@@ -4,7 +4,7 @@
 import re
 import time
 from datetime import datetime, timedelta
-from database.db import add_log, mark_keyword_used, add_post, update_post_status, is_keyword_used, get_published_titles
+from database.db import add_log, add_post, update_post_status, get_published_titles
 from modules.keyword_fetcher import get_fresh_keywords
 from modules.ai_writer import generate_post
 from modules.image_fetcher import get_images, embed_images_in_content
@@ -48,11 +48,6 @@ def run_single_post(
                 return {"success": False, "error": "사용 가능한 키워드 없음"}
             keyword = keywords[0]
 
-        # [방법 1+3] 키워드 중복 체크 (자동/수동 공통)
-        if is_keyword_used(keyword, days=30):
-            add_log(f"중복 키워드 스킵 (30일 이내 사용됨): {keyword}", "WARN")
-            return {"success": False, "error": f"중복 키워드: {keyword} (30일 이내 사용됨)"}
-
         add_log(f"=== 글쓰기 파이프라인 시작: {keyword} ===")
 
         # 2. AI 글쓰기
@@ -91,7 +86,6 @@ def run_single_post(
 
         # 7. DB 업데이트
         update_post_status(post_id, "published", blogger_post_id=result["id"])
-        mark_keyword_used(keyword)
 
         add_log(f"=== 파이프라인 완료: {post_data['title']} ===")
         return {

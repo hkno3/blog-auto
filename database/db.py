@@ -30,15 +30,6 @@ def init_db():
         )
     """)
 
-    # 사용된 키워드 중복 방지
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS used_keywords (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            keyword TEXT UNIQUE NOT NULL,
-            used_at TEXT DEFAULT (datetime('now', 'localtime'))
-        )
-    """)
-
     # sitemap 캐시
     c.execute("""
         CREATE TABLE IF NOT EXISTS sitemap_cache (
@@ -83,28 +74,6 @@ def add_log(message: str, level: str = "INFO"):
     conn.execute(
         "INSERT INTO logs (level, message) VALUES (?, ?)",
         (level, message)
-    )
-    conn.commit()
-    conn.close()
-
-
-def is_keyword_used(keyword: str, days: int = 30) -> bool:
-    conn = get_conn()
-    row = conn.execute(
-        """SELECT id FROM used_keywords
-           WHERE keyword = ?
-           AND used_at > datetime('now', ?, 'localtime')""",
-        (keyword, f"-{days} days")
-    ).fetchone()
-    conn.close()
-    return row is not None
-
-
-def mark_keyword_used(keyword: str):
-    conn = get_conn()
-    conn.execute(
-        "INSERT OR REPLACE INTO used_keywords (keyword, used_at) VALUES (?, datetime('now', 'localtime'))",
-        (keyword,)
     )
     conn.commit()
     conn.close()
