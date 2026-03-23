@@ -209,7 +209,7 @@ def get_fresh_keywords(count: int = 20, source: str = "both") -> list[str]:
         if not kw:
             return
         word_count = len(kw.split())
-        if word_count < 3 or word_count > 4:
+        if word_count < 2 or word_count > 5:
             return
         combined.append(kw)
 
