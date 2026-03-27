@@ -6,7 +6,7 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for
 
 from config import get_api_key, set_api_key, get_setting, set_setting
 from database.db import init_db, get_posts, get_logs, add_log, get_gemini_usage
-from modules.keyword_fetcher import get_fresh_keywords
+from modules.keyword_fetcher import get_fresh_keywords, _get_naver_autocomplete, _get_naver_related, _get_google_autocomplete
 from modules.blogger_uploader import check_auth_status
 from modules.scheduler import run_single_post, run_batch
 from modules.keyword_analyzer import analyze_keywords
@@ -101,6 +101,29 @@ def api_keywords():
     source = request.args.get("source", "google")
     keywords = get_fresh_keywords(count=100, source=source)
     return jsonify({"keywords": keywords})
+
+
+@app.route("/api/keywords/suggest")
+def api_keywords_suggest():
+    keyword = request.args.get("keyword", "").strip()
+    if not keyword:
+        return jsonify({"keywords": []})
+    seen = set()
+    results = [keyword]
+    seen.add(keyword)
+    for kw in _get_naver_autocomplete(keyword, max_count=10):
+        if kw not in seen:
+            results.append(kw)
+            seen.add(kw)
+    for kw in _get_naver_related(keyword, max_count=10):
+        if kw not in seen:
+            results.append(kw)
+            seen.add(kw)
+    for kw in _get_google_autocomplete(keyword, max_count=10):
+        if kw not in seen:
+            results.append(kw)
+            seen.add(kw)
+    return jsonify({"keywords": results})
 
 
 # ─── 수익형 키워드 분석 ────────────────────────────────

@@ -201,20 +201,31 @@
 let selectedKeywords = [];
 
 async function loadKeywords() {
-  showToast('키워드 불러오는 중...');
   const container = document.getElementById('keyword-list');
   const header = document.getElementById('keyword-list-header');
+  const manualKeyword = document.getElementById('manual-keyword').value.trim();
 
   // 로딩 표시 (기존 칩 유지)
   const loadingEl = document.createElement('span');
   loadingEl.id = 'kw-loading';
   loadingEl.style.cssText = 'color:#64748b;font-size:13px;align-self:center;';
-  loadingEl.textContent = 'RSS 수집 + 서브키워드 조합 중...';
+
+  let url;
+  if (manualKeyword) {
+    showToast(`"${manualKeyword}" 관련 키워드 추천 중...`);
+    loadingEl.textContent = `"${manualKeyword}" 연관 키워드 조합 중...`;
+    url = `/api/keywords/suggest?keyword=${encodeURIComponent(manualKeyword)}`;
+  } else {
+    showToast('키워드 불러오는 중...');
+    loadingEl.textContent = 'RSS 수집 + 서브키워드 조합 중...';
+    url = '/api/keywords?source=both';
+  }
+
   container.appendChild(loadingEl);
   container.style.display = 'flex';
   header.style.display = 'flex';
 
-  const res = await fetch('/api/keywords?source=both');
+  const res = await fetch(url);
   const data = await res.json();
 
   // 로딩 표시 제거
