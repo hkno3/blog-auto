@@ -33,21 +33,6 @@
   </div>
 
   <div class="form-group">
-    <label>Unsplash Access Key <span class="optional">선택</span></label>
-    <div class="input-with-btn">
-      <input type="password" id="unsplash_key" value="{{ config.unsplash_key }}"
-             placeholder="Unsplash API Key">
-      <button class="btn-secondary" onclick="testApi('unsplash')">연결 테스트</button>
-    </div>
-    <div id="unsplash-result" class="api-result"></div>
-    <small>
-      <a href="https://unsplash.com/developers" target="_blank">
-        👉 Unsplash API 키 발급 (무료)
-      </a>
-    </small>
-  </div>
-
-  <div class="form-group">
     <label>Pexels API Key <span class="optional">선택</span></label>
     <div class="input-with-btn">
       <input type="password" id="pexels_key" value="{{ config.pexels_key }}"
@@ -73,6 +58,21 @@
     <small>
       <a href="https://pixabay.com/api/docs/" target="_blank">
         👉 Pixabay API 키 발급 (무료)
+      </a>
+    </small>
+  </div>
+
+  <div class="form-group">
+    <label>Unsplash Access Key <span class="optional">선택</span></label>
+    <div class="input-with-btn">
+      <input type="password" id="unsplash_key" value="{{ config.unsplash_key }}"
+             placeholder="Unsplash API Key">
+      <button class="btn-secondary" onclick="testApi('unsplash')">연결 테스트</button>
+    </div>
+    <div id="unsplash-result" class="api-result"></div>
+    <small>
+      <a href="https://unsplash.com/developers" target="_blank">
+        👉 Unsplash API 키 발급 (무료)
       </a>
     </small>
   </div>
