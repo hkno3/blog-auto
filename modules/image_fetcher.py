@@ -109,22 +109,22 @@ def _fetch_pixabay(query: str, count: int = 5) -> list[dict]:
 
 def get_images(keyword: str, count: int = 5) -> list[dict]:
     """
-    키워드로 이미지 검색 (Unsplash 우선, 부족하면 Pexels 보완)
+    키워드로 이미지 검색 (Pexels 우선, 부족하면 Pixabay, Unsplash 보완)
     """
-    images = _fetch_unsplash(keyword, count)
-    add_log(f"Unsplash에서 {len(images)}개 이미지 수집")
-
-    if len(images) < count:
-        needed = count - len(images)
-        pexels_images = _fetch_pexels(keyword, needed)
-        images += pexels_images
-        add_log(f"Pexels에서 {len(pexels_images)}개 이미지 추가")
+    images = _fetch_pexels(keyword, count)
+    add_log(f"Pexels에서 {len(images)}개 이미지 수집")
 
     if len(images) < count:
         needed = count - len(images)
         pixabay_images = _fetch_pixabay(keyword, needed)
         images += pixabay_images
         add_log(f"Pixabay에서 {len(pixabay_images)}개 이미지 추가")
+
+    if len(images) < count:
+        needed = count - len(images)
+        unsplash_images = _fetch_unsplash(keyword, needed)
+        images += unsplash_images
+        add_log(f"Unsplash에서 {len(unsplash_images)}개 이미지 추가")
 
     if not images:
         add_log(f"이미지 없음 - API 키 확인 필요 ({keyword})", "WARN")
