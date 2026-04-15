@@ -192,27 +192,49 @@ def insert_external_links(content: str, keyword: str = "") -> str:
 
     soup = BeautifulSoup(content, "html.parser")
 
-    # ── 문단 뒤 별도 링크 문단 삽입 ─────────────────────
+    # ── 문단 뒤 버튼 링크 삽입 ──────────────────────────
+    all_entries = []
+    for site_info in TARGET_SITES:
+        entries = _load_cache(site_info["name"])
+        for e in entries:
+            e["site"] = site_info["name"]
+        all_entries += entries
+
     used_urls = set()
     inline_count = 0
     for p in soup.find_all("p"):
         text = p.get_text()
         if len(text) < 50:
             continue
-        links = find_related_links(text, top_n=2)
+
+        # 유사도 상위 링크 찾기, 없으면 랜덤
+        links = find_related_links(text, top_n=3)
+        chosen = None
         for link in links:
-            if link["url"] in used_urls or link["score"] < 0.08:
-                continue
-            title = link["title"] or "관련 글 보기"
-            link_p = BeautifulSoup(
-                f'<p><a href="{link["url"]}" target="_blank" rel="noopener noreferrer"'
-                f' style="color:#1a73e8;text-decoration:underline;">{title}</a></p>',
+            if link["url"] not in used_urls and link["score"] >= 0.10:
+                chosen = link
+                break
+        if not chosen:
+            # 유사도 무관 - 미사용 URL 중 랜덤 선택
+            pool = [e for e in all_entries if e["url"] not in used_urls]
+            if pool:
+                chosen = random.choice(pool)
+
+        if chosen:
+            title = chosen["title"] or "관련 글 보기"
+            url = chosen["url"]
+            btn = BeautifulSoup(
+                f'<p style="background:#FF6B35;color:white;padding:15px 25px;'
+                f'text-align:center;border-radius:8px;margin:20px auto;'
+                f'display:flex;align-items:center;justify-content:center;">'
+                f'<a href="{url}" target="_blank" rel="noopener noreferrer" '
+                f'style="color:white;text-decoration:none;font-weight:bold;font-size:22px;">'
+                f'{title}</a></p>',
                 "html.parser"
             )
-            p.insert_after(link_p)
-            used_urls.add(link["url"])
+            p.insert_after(btn)
+            used_urls.add(url)
             inline_count += 1
-            break
 
     # ── 글 끝 '함께 보면 좋은 글' 무조건 추가 ──────────
     related = _get_related_links_for_footer(keyword, used_urls, count=3)
@@ -299,24 +321,12 @@ def _build_related_section(links: list[dict]) -> str:
         url = link.get("url", "")
         if not url:
             continue
-        items_html += f"""
-        <li style="margin-bottom:8px;">
-          <a href="{url}" target="_blank" rel="noopener noreferrer"
-             style="color:#1a73e8;text-decoration:none;font-weight:500;">
-            📌 {title}
-          </a>
-        </li>"""
+        items_html += f'<p><a href="{url}" target="_blank" rel="noopener noreferrer">{title}</a></p>\n'
 
     if not items_html:
         return ""
 
-    return f"""
-<div style="margin-top:40px;padding:20px;background:#f8fafc;border-left:4px solid #4f46e5;border-radius:8px;">
-  <h3 style="margin:0 0 12px;font-size:1.1em;color:#1e293b;">📚 함께 보면 좋은 글</h3>
-  <ul style="list-style:none;padding:0;margin:0;">
-    {items_html}
-  </ul>
-</div>"""
+    return f"<h2>함께 보면 좋은 글</h2>\n{items_html}"
 
 
 # 하위 호환성 유지
