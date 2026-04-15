@@ -131,7 +131,14 @@ def _load_cache(site: str) -> list[dict]:
         "SELECT url, title, description FROM sitemap_cache WHERE site=?", (site,)
     ).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    result = []
+    for r in rows:
+        d = dict(r)
+        # 캐시에 인코딩된 채로 저장된 타이틀 디코딩
+        if d.get("title") and "%" in d["title"]:
+            d["title"] = re.sub(r"[-_]+", " ", unquote(d["title"])).strip()
+        result.append(d)
+    return result
 
 
 # ─── Google Sheets API v4 파싱 ─────────────────────────
@@ -238,6 +245,8 @@ def insert_external_links(content: str, keyword: str = "") -> str:
     used_urls = set()
     inline_count = 0
     for p in soup.find_all("p"):
+        if inline_count >= 3:
+            break
         text = p.get_text()
         if len(text) < 50:
             continue
