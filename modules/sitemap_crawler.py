@@ -35,6 +35,41 @@ TARGET_SITES = [
     },
 ]
 
+# ─── 주제별 사이트 매핑 ────────────────────────────────────
+_SITE_TOPIC_MAP = {
+    "bodyandwell": [
+        "건강", "음식", "의료", "질병", "영양", "다이어트", "운동", "피부",
+        "약", "병원", "치료", "증상", "비타민", "면역", "수면", "식단",
+        "탈모", "혈압", "당뇨", "암", "관절", "소화", "장", "심장", "폐",
+        "두통", "비만", "체중", "칼로리", "단백질", "유산균", "백신",
+    ],
+    "bizachieve": [
+        "세무", "재무", "주식", "보조금", "창업", "대출", "금융", "사업",
+        "취업", "소상공인", "학업", "여행", "회생", "파산", "정부지원",
+        "보험", "문화", "카드", "청소", "폐기물", "이사", "영업",
+        "교통사고", "재판", "실업", "세금", "절세", "환급", "지원금",
+        "연금", "퇴직", "직장", "투자", "펀드", "적금", "청약",
+    ],
+    "cointrail": [
+        "부동산", "아파트", "청약", "전세", "월세", "임대", "매매",
+        "분양", "재개발", "재건축", "토지", "주택", "상가", "오피스텔",
+    ],
+}
+
+
+def _detect_site_for_keyword(keyword: str) -> str:
+    """키워드 주제에 따라 연결할 사이트 결정"""
+    kw = keyword.lower()
+    scores = {}
+    for site, topics in _SITE_TOPIC_MAP.items():
+        scores[site] = sum(1 for t in topics if t in kw)
+
+    best = max(scores, key=lambda s: scores[s])
+    if scores[best] > 0:
+        return best
+    # 매칭 없으면 bodyandwell 기본값
+    return "bodyandwell"
+
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; BlogAutoBot/1.0)"}
 CACHE_HOURS = 6  # 6시간마다 갱신
 
@@ -192,27 +227,49 @@ def insert_external_links(content: str, keyword: str = "") -> str:
 
     soup = BeautifulSoup(content, "html.parser")
 
-    # ── 문단 뒤 별도 링크 문단 삽입 ─────────────────────
+    # ── 문단 뒤 버튼 링크 삽입 ──────────────────────────
+    all_entries = []
+    for site_info in TARGET_SITES:
+        entries = _load_cache(site_info["name"])
+        for e in entries:
+            e["site"] = site_info["name"]
+        all_entries += entries
+
     used_urls = set()
     inline_count = 0
     for p in soup.find_all("p"):
         text = p.get_text()
         if len(text) < 50:
             continue
-        links = find_related_links(text, top_n=2)
+
+        # 유사도 상위 링크 찾기, 없으면 랜덤
+        links = find_related_links(text, top_n=3)
+        chosen = None
         for link in links:
-            if link["url"] in used_urls or link["score"] < 0.08:
-                continue
-            title = link["title"] or "관련 글 보기"
-            link_p = BeautifulSoup(
-                f'<p><a href="{link["url"]}" target="_blank" rel="noopener noreferrer"'
-                f' style="color:#1a73e8;text-decoration:underline;">{title}</a></p>',
+            if link["url"] not in used_urls and link["score"] >= 0.10:
+                chosen = link
+                break
+        if not chosen:
+            # 유사도 무관 - 미사용 URL 중 랜덤 선택
+            pool = [e for e in all_entries if e["url"] not in used_urls]
+            if pool:
+                chosen = random.choice(pool)
+
+        if chosen:
+            title = chosen["title"] or "관련 글 보기"
+            url = chosen["url"]
+            btn = BeautifulSoup(
+                f'<p style="background:#FF6B35;color:white;padding:15px 25px;'
+                f'text-align:center;border-radius:8px;margin:20px auto;'
+                f'display:flex;align-items:center;justify-content:center;">'
+                f'<a href="{url}" target="_blank" rel="noopener noreferrer" '
+                f'style="color:white;text-decoration:none;font-weight:bold;font-size:22px;">'
+                f'{title}</a></p>',
                 "html.parser"
             )
-            p.insert_after(link_p)
-            used_urls.add(link["url"])
+            p.insert_after(btn)
+            used_urls.add(url)
             inline_count += 1
-            break
 
     # ── 글 끝 '함께 보면 좋은 글' 무조건 추가 ──────────
     related = _get_related_links_for_footer(keyword, used_urls, count=3)
@@ -225,65 +282,52 @@ def insert_external_links(content: str, keyword: str = "") -> str:
 
 
 def _get_related_links_for_footer(keyword: str, exclude_urls: set, count: int = 3) -> list[dict]:
-    """하단 섹션용 링크 - 유사도 상위에서 랜덤 선택으로 다양성 확보"""
-    all_entries = []
-    for site_info in TARGET_SITES:
-        entries = _load_cache(site_info["name"])
-        for e in entries:
-            e["site"] = site_info["name"]
-        all_entries += entries
+    """하단 섹션용 링크 - 주제별 사이트 선택 + 유사도 10% 이상"""
+    target_site = _detect_site_for_keyword(keyword)
+
+    # 대상 사이트 캐시 로드
+    entries = _load_cache(target_site)
 
     # 캐시 없으면 즉시 크롤링
-    if not all_entries:
-        add_log("캐시 없음 - 즉시 크롤링")
+    if not entries:
+        add_log(f"캐시 없음 - 즉시 크롤링: {target_site}")
         refresh_feed_cache(force=True)
-        for site_info in TARGET_SITES:
-            entries = _load_cache(site_info["name"])
-            for e in entries:
-                e["site"] = site_info["name"]
-            all_entries += entries
+        entries = _load_cache(target_site)
 
-    if not all_entries:
-        add_log("크롤링 실패 - 링크 없음", "WARN")
+    if not entries:
+        add_log(f"크롤링 실패 - 링크 없음: {target_site}", "WARN")
         return []
 
-    # 유사도 점수 계산
+    # 유사도 10% 이상인 것만 추출
     scored = []
-    for e in all_entries:
+    for e in entries:
         if e["url"] in exclude_urls or not e.get("url"):
             continue
         score = _similarity_score(keyword, e.get("title", ""))
-        scored.append({**e, "score": score})
+        if score >= 0.10:
+            scored.append({**e, "site": target_site, "score": score})
 
     scored.sort(key=lambda x: x["score"], reverse=True)
 
-    # 상위 10개 중 랜덤 선택 (매번 다른 링크 노출)
+    # 상위 10개 중 랜덤 선택
     pool = scored[:10]
-    if len(pool) <= count:
-        candidates = pool
+    if len(pool) >= count:
+        candidates = random.sample(pool, count)
     else:
-        # 사이트별 균형: 각 사이트 풀 분리 후 랜덤
-        pool_by_site = {}
-        for item in pool:
-            site = item["site"]
-            pool_by_site.setdefault(site, []).append(item)
-
-        candidates = []
-        site_names = list(pool_by_site.keys())
-        random.shuffle(site_names)
-        for site in site_names:
-            site_pool = pool_by_site[site]
-            pick = random.choice(site_pool)
-            candidates.append(pick)
-            if len(candidates) >= count:
-                break
-
-        # 부족하면 나머지에서 보충
+        candidates = pool
+        # 부족하면 랜덤으로 보충
         if len(candidates) < count:
-            remaining = [x for x in pool if x not in candidates]
+            remaining = [
+                {**e, "site": target_site, "score": 0}
+                for e in entries
+                if e["url"] not in exclude_urls
+                and e["url"] not in {c["url"] for c in candidates}
+                and e.get("url")
+            ]
             random.shuffle(remaining)
             candidates += remaining[:count - len(candidates)]
 
+    add_log(f"하단 링크 사이트: {target_site} ({len(candidates)}개)")
     return candidates[:count]
 
 
@@ -299,24 +343,12 @@ def _build_related_section(links: list[dict]) -> str:
         url = link.get("url", "")
         if not url:
             continue
-        items_html += f"""
-        <li style="margin-bottom:8px;">
-          <a href="{url}" target="_blank" rel="noopener noreferrer"
-             style="color:#1a73e8;text-decoration:none;font-weight:500;">
-            📌 {title}
-          </a>
-        </li>"""
+        items_html += f'<p><a href="{url}" target="_blank" rel="noopener noreferrer">{title}</a></p>\n'
 
     if not items_html:
         return ""
 
-    return f"""
-<div style="margin-top:40px;padding:20px;background:#f8fafc;border-left:4px solid #4f46e5;border-radius:8px;">
-  <h3 style="margin:0 0 12px;font-size:1.1em;color:#1e293b;">📚 함께 보면 좋은 글</h3>
-  <ul style="list-style:none;padding:0;margin:0;">
-    {items_html}
-  </ul>
-</div>"""
+    return f"<h2>함께 보면 좋은 글</h2>\n{items_html}"
 
 
 # 하위 호환성 유지
