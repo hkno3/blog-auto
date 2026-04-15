@@ -7,6 +7,7 @@
 import re
 import random
 import requests
+from urllib.parse import unquote
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 from config import get_api_key
@@ -59,6 +60,7 @@ def _slug_to_title(url: str) -> str:
     try:
         path = url.rstrip("/").split("/")[-1]
         path = path.split("?")[0].split("#")[0]  # 쿼리스트링/앵커 제거
+        path = unquote(path)                      # URL 인코딩 디코딩 (%eb%af... → 한글)
         path = re.sub(r"\.\w+$", "", path)        # 확장자 제거
         title = re.sub(r"[-_]+", " ", path).strip()
         return title if len(title) > 2 else ""
