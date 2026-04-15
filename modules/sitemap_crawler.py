@@ -234,7 +234,7 @@ def insert_external_links(content: str, keyword: str = "") -> str:
 
     soup = BeautifulSoup(content, "html.parser")
 
-    # ── 문단 뒤 버튼 링크 삽입 ──────────────────────────
+    # ── 문단 뒤 버튼 링크 삽입 (3구간에 띄엄띄엄) ────────
     all_entries = []
     for site_info in TARGET_SITES:
         entries = _load_cache(site_info["name"])
@@ -242,14 +242,24 @@ def insert_external_links(content: str, keyword: str = "") -> str:
             e["site"] = site_info["name"]
         all_entries += entries
 
+    # 50자 이상 문단만 추출
+    all_paras = [p for p in soup.find_all("p") if len(p.get_text()) >= 50]
+    total = len(all_paras)
+
+    # 전체 문단을 3구간으로 나눠 각 구간 중간 문단 선택
+    target_paras = []
+    if total >= 3:
+        size = total // 3
+        for i in range(3):
+            idx = i * size + size // 2  # 각 구간 중간
+            target_paras.append(all_paras[min(idx, total - 1)])
+    else:
+        target_paras = all_paras  # 문단이 3개 미만이면 전부
+
     used_urls = set()
     inline_count = 0
-    for p in soup.find_all("p"):
-        if inline_count >= 3:
-            break
+    for p in target_paras:
         text = p.get_text()
-        if len(text) < 50:
-            continue
 
         # 유사도 상위 링크 찾기, 없으면 랜덤
         links = find_related_links(text, top_n=3)
@@ -259,7 +269,6 @@ def insert_external_links(content: str, keyword: str = "") -> str:
                 chosen = link
                 break
         if not chosen:
-            # 유사도 무관 - 미사용 URL 중 랜덤 선택
             pool = [e for e in all_entries if e["url"] not in used_urls]
             if pool:
                 chosen = random.choice(pool)
