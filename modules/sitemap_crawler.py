@@ -1,29 +1,67 @@
 """
 외부 링크 삽입 모듈
-- RSS Feed 파싱 (sitemap 대신 - 더 단순하고 최신 글 제공)
+- Google Sheets에서 사이트맵 URL 가져오기 (gviz CSV 방식)
 - 글 문단과 유사한 주제의 링크 자동 삽입
 - 6시간 캐싱 + 상위 결과에서 랜덤 선택으로 다양성 확보
 """
 import re
+import csv
 import random
 import requests
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
+from io import StringIO
 from database.db import get_conn, add_log
 
+# ─── 대상 사이트 및 Google Sheets 설정 ───────────────────
 TARGET_SITES = [
     {
-        "name": "bodyandwell",
-        "feed": "https://bodyandwell.com/feed",
+        "name": "bizachieve",
+        "sheets": [
+            "1F5OMpIyI1ZM8V39Zt4-ls_TzBqvWr0N5Tim_td_KwxA",  # postsitemap1
+            "1Qldo1hTjhTcwucAiv2s3xssrwbyfhu-ec8F4i2Dd3CQ",  # postsitemap2
+            "1wqdV6q3YOajzLKulu6Aq1K3hQrWiM2na_QlWE-eLVrM",  # postsitemap3
+        ],
     },
     {
-        "name": "bizachieve",
-        "feed": "https://bizachieve.com/feed",
+        "name": "bodyandwell",
+        "sheets": [
+            "1tULUyDltaH_uw7yNFGNkH3FXUigLWGxZnrj6tcgw5ZQ",  # postsitemap1
+            "149kv-IyPm_KPYHKuYpUc2K2SOa532BID2oVMo-omSso",  # postsitemap2
+            "1rRcv0xuOCfaKqg4DPxxJ92KEfy-mVJ6oB--v7E2t2WA",  # postsitemap3
+            "1JPv0dwh4wuLkdZ4InsmmbMQeA3n5b1r2Aqc1dVWCveI",  # postsitemap4
+            "1277C9w5ieDvZ2k85Mme0mwAI0glGn8XqIdQBNtBA3fs",  # postsitemap5
+        ],
+    },
+    {
+        "name": "cointrail",
+        "sheets": [
+            "1pUdL05UghiNeTSmgXKa8w25zLKUeKeTE0T4fFHinJNE",  # postsitemap
+        ],
     },
 ]
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; BlogAutoBot/1.0)"}
-CACHE_HOURS = 6  # 6시간마다 갱신 (24시간→6시간으로 단축)
+CACHE_HOURS = 6  # 6시간마다 갱신
+
+
+# ─── Google Sheets URL 헬퍼 ─────────────────────────────
+
+def _sheet_csv_url(sheet_id: str) -> str:
+    """Google Sheet → CSV 다운로드 URL (공유 링크 뷰어 권한으로 접근 가능)"""
+    return f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv"
+
+
+def _slug_to_title(url: str) -> str:
+    """URL 슬러그에서 의사 제목 추출 (예: /weight-loss-tips → weight loss tips)"""
+    try:
+        path = url.rstrip("/").split("/")[-1]
+        path = path.split("?")[0].split("#")[0]  # 쿼리스트링/앵커 제거
+        path = re.sub(r"\.\w+$", "", path)        # 확장자 제거
+        title = re.sub(r"[-_]+", " ", path).strip()
+        return title if len(title) > 2 else ""
+    except Exception:
+        return ""
 
 
 # ─── 캐시 ──────────────────────────────────────────────
@@ -63,60 +101,53 @@ def _load_cache(site: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-# ─── RSS Feed 파싱 ──────────────────────────────────────
+# ─── Google Sheets CSV 파싱 ─────────────────────────────
 
-def _fetch_feed(feed_url: str) -> list[dict]:
-    """RSS feed에서 글 목록 파싱"""
+def _fetch_gsheet(sheet_id: str) -> list[dict]:
+    """Google Sheet 한 장에서 URL 목록 파싱"""
+    url = _sheet_csv_url(sheet_id)
     try:
-        resp = requests.get(feed_url, headers=HEADERS, timeout=15)
+        resp = requests.get(url, headers=HEADERS, timeout=15)
         resp.raise_for_status()
-        soup = BeautifulSoup(resp.content, "xml")
 
-        # xml 파서 실패 시 lxml로 재시도
-        if not soup.find("item"):
-            soup = BeautifulSoup(resp.content, "lxml")
-
+        reader = csv.reader(StringIO(resp.text))
         entries = []
-        for item in soup.find_all("item"):
-            title_tag = item.find("title")
-            link_tag = item.find("link")
-            desc_tag = item.find("description")
-
-            title = title_tag.get_text(strip=True) if title_tag else ""
-            # <link> 태그가 비어있을 경우 next_sibling으로 URL 추출
-            if link_tag:
-                url = link_tag.get_text(strip=True) or (link_tag.next_sibling or "").strip()
-            else:
-                url = ""
-            description = ""
-            if desc_tag:
-                desc_text = BeautifulSoup(desc_tag.get_text(), "html.parser").get_text()
-                description = desc_text[:200].strip()
-
-            if url and title and len(title) > 4:
-                entries.append({"url": url, "title": title, "description": description})
+        for i, row in enumerate(reader):
+            if not row:
+                continue
+            cell = row[0].strip().strip('"')
+            # 헤더 행 스킵 (URL로 시작하지 않으면 건너뜀)
+            if not cell.startswith("http"):
+                continue
+            title = _slug_to_title(cell)
+            entries.append({"url": cell, "title": title, "description": ""})
 
         return entries
     except Exception as e:
-        add_log(f"Feed 파싱 실패 ({feed_url}): {e}", "WARN")
+        add_log(f"Google Sheet 파싱 실패 ({sheet_id}): {e}", "WARN")
         return []
 
 
 def refresh_feed_cache(force: bool = False):
-    """전체 사이트 feed 캐시 갱신"""
+    """전체 사이트 Google Sheets 캐시 갱신"""
     for site_info in TARGET_SITES:
         name = site_info["name"]
         if not force and _is_cache_valid(name):
-            add_log(f"feed 캐시 유효 - 스킵: {name}")
+            add_log(f"캐시 유효 - 스킵: {name}")
             continue
 
-        add_log(f"feed 크롤링 시작: {name}")
-        entries = _fetch_feed(site_info["feed"])
-        if entries:
-            _save_cache(name, entries)
-            add_log(f"feed 캐시 저장: {name} ({len(entries)}개)")
+        add_log(f"Google Sheets 크롤링 시작: {name}")
+        all_entries = []
+        for sheet_id in site_info["sheets"]:
+            entries = _fetch_gsheet(sheet_id)
+            all_entries.extend(entries)
+            add_log(f"  시트 {sheet_id[:8]}... → {len(entries)}개")
+
+        if all_entries:
+            _save_cache(name, all_entries)
+            add_log(f"캐시 저장: {name} (총 {len(all_entries)}개)")
         else:
-            add_log(f"feed 데이터 없음: {name}", "WARN")
+            add_log(f"데이터 없음: {name}", "WARN")
 
 
 # ─── 유사도 & 링크 삽입 ────────────────────────────────
@@ -201,7 +232,7 @@ def _get_related_links_for_footer(keyword: str, exclude_urls: set, count: int = 
 
     # 캐시 없으면 즉시 크롤링
     if not all_entries:
-        add_log("feed 캐시 없음 - 즉시 크롤링")
+        add_log("캐시 없음 - 즉시 크롤링")
         refresh_feed_cache(force=True)
         for site_info in TARGET_SITES:
             entries = _load_cache(site_info["name"])
@@ -210,15 +241,15 @@ def _get_related_links_for_footer(keyword: str, exclude_urls: set, count: int = 
             all_entries += entries
 
     if not all_entries:
-        add_log("feed 크롤링 실패 - 링크 없음", "WARN")
+        add_log("크롤링 실패 - 링크 없음", "WARN")
         return []
 
     # 유사도 점수 계산
     scored = []
     for e in all_entries:
-        if e["url"] in exclude_urls or not e.get("title") or not e.get("url"):
+        if e["url"] in exclude_urls or not e.get("url"):
             continue
-        score = _similarity_score(keyword, e["title"])
+        score = _similarity_score(keyword, e.get("title", ""))
         scored.append({**e, "score": score})
 
     scored.sort(key=lambda x: x["score"], reverse=True)
@@ -228,7 +259,7 @@ def _get_related_links_for_footer(keyword: str, exclude_urls: set, count: int = 
     if len(pool) <= count:
         candidates = pool
     else:
-        # 사이트별 균형: bodyandwell/bizachieve 각각 풀 분리 후 랜덤
+        # 사이트별 균형: 각 사이트 풀 분리 후 랜덤
         pool_by_site = {}
         for item in pool:
             site = item["site"]
