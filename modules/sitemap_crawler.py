@@ -19,18 +19,12 @@ TARGET_SITES = [
         "name": "bizachieve",
         "sheets": [
             "1F5OMpIyI1ZM8V39Zt4-ls_TzBqvWr0N5Tim_td_KwxA",  # postsitemap1
-            "1Qldo1hTjhTcwucAiv2s3xssrwbyfhu-ec8F4i2Dd3CQ",  # postsitemap2
-            "1wqdV6q3YOajzLKulu6Aq1K3hQrWiM2na_QlWE-eLVrM",  # postsitemap3
         ],
     },
     {
         "name": "bodyandwell",
         "sheets": [
             "1tULUyDltaH_uw7yNFGNkH3FXUigLWGxZnrj6tcgw5ZQ",  # postsitemap1
-            "149kv-IyPm_KPYHKuYpUc2K2SOa532BID2oVMo-omSso",  # postsitemap2
-            "1rRcv0xuOCfaKqg4DPxxJ92KEfy-mVJ6oB--v7E2t2WA",  # postsitemap3
-            "1JPv0dwh4wuLkdZ4InsmmbMQeA3n5b1r2Aqc1dVWCveI",  # postsitemap4
-            "1277C9w5ieDvZ2k85Mme0mwAI0glGn8XqIdQBNtBA3fs",  # postsitemap5
         ],
     },
     {
