@@ -1,16 +1,15 @@
 """
 외부 링크 삽입 모듈
-- Google Sheets에서 사이트맵 URL 가져오기 (gviz CSV 방식)
+- Google Sheets API v4로 사이트맵 URL 가져오기
 - 글 문단과 유사한 주제의 링크 자동 삽입
 - 6시간 캐싱 + 상위 결과에서 랜덤 선택으로 다양성 확보
 """
 import re
-import csv
 import random
 import requests
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
-from io import StringIO
+from config import get_api_key
 from database.db import get_conn, add_log
 
 # ─── 대상 사이트 및 Google Sheets 설정 ───────────────────
@@ -44,12 +43,15 @@ TARGET_SITES = [
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; BlogAutoBot/1.0)"}
 CACHE_HOURS = 6  # 6시간마다 갱신
 
+SHEETS_API_BASE = "https://sheets.googleapis.com/v4/spreadsheets"
 
-# ─── Google Sheets URL 헬퍼 ─────────────────────────────
 
-def _sheet_csv_url(sheet_id: str) -> str:
-    """Google Sheet → CSV 다운로드 URL (공유 링크 뷰어 권한으로 접근 가능)"""
-    return f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv"
+# ─── Google Sheets API v4 헬퍼 ─────────────────────────
+
+def _sheet_api_url(sheet_id: str) -> str:
+    """Google Sheets API v4 URL (컬럼 A 전체)"""
+    api_key = get_api_key("google_sheets")
+    return f"{SHEETS_API_BASE}/{sheet_id}/values/A:A?key={api_key}"
 
 
 def _slug_to_title(url: str) -> str:
@@ -101,30 +103,34 @@ def _load_cache(site: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-# ─── Google Sheets CSV 파싱 ─────────────────────────────
+# ─── Google Sheets API v4 파싱 ─────────────────────────
 
 def _fetch_gsheet(sheet_id: str) -> list[dict]:
-    """Google Sheet 한 장에서 URL 목록 파싱"""
-    url = _sheet_csv_url(sheet_id)
+    """Google Sheets API v4로 URL 목록 파싱"""
+    api_key = get_api_key("google_sheets")
+    if not api_key:
+        add_log("Google Sheets API 키 없음 - 설정 화면에서 입력해주세요", "WARN")
+        return []
+
+    url = _sheet_api_url(sheet_id)
     try:
         resp = requests.get(url, headers=HEADERS, timeout=15)
         resp.raise_for_status()
+        data = resp.json()
 
-        reader = csv.reader(StringIO(resp.text))
         entries = []
-        for i, row in enumerate(reader):
+        for row in data.get("values", []):
             if not row:
                 continue
-            cell = row[0].strip().strip('"')
-            # 헤더 행 스킵 (URL로 시작하지 않으면 건너뜀)
+            cell = row[0].strip()
             if not cell.startswith("http"):
-                continue
+                continue  # 헤더 행 또는 비URL 스킵
             title = _slug_to_title(cell)
             entries.append({"url": cell, "title": title, "description": ""})
 
         return entries
     except Exception as e:
-        add_log(f"Google Sheet 파싱 실패 ({sheet_id}): {e}", "WARN")
+        add_log(f"Google Sheets API 파싱 실패 ({sheet_id[:8]}...): {e}", "WARN")
         return []
 
 

@@ -153,6 +153,7 @@ def settings():
         "naver_ad_secret": "****" if get_api_key("naver_ad_secret") else "",
         "naver_client_id": get_api_key("naver_client_id") or "",
         "naver_client_secret": "****" if get_api_key("naver_client_secret") else "",
+        "google_sheets_key": "****" if get_api_key("google_sheets") else "",
         "blogger_blog_id": get_setting("blogger_blog_id") or "",
         "keyword_source": get_setting("keyword_source") or "google",
         "batch_count": get_setting("batch_count") or 3,
@@ -180,6 +181,7 @@ def settings_save():
         "naver_ad_secret": data.get("naver_ad_secret", ""),
         "naver_client_id": data.get("naver_client_id", ""),
         "naver_client_secret": data.get("naver_client_secret", ""),
+        "google_sheets": data.get("google_sheets_key", ""),
     }
     for name, value in api_keys.items():
         if value and value != "****":
@@ -287,6 +289,27 @@ def test_api():
                 results["pixabay"] = {"ok": False, "msg": "API 키 없음"}
         except Exception as e:
             results["pixabay"] = {"ok": False, "msg": str(e)}
+
+    if api_name in ("google_sheets", "all"):
+        try:
+            import requests as req
+            key = get_api_key("google_sheets")
+            if key:
+                # bizachieve 첫 번째 시트로 테스트
+                test_id = "1F5OMpIyI1ZM8V39Zt4-ls_TzBqvWr0N5Tim_td_KwxA"
+                r = req.get(
+                    f"https://sheets.googleapis.com/v4/spreadsheets/{test_id}/values/A1:A3",
+                    params={"key": key},
+                    timeout=10,
+                )
+                r.raise_for_status()
+                data_r = r.json()
+                count = len(data_r.get("values", []))
+                results["google_sheets"] = {"ok": True, "msg": f"연결 성공 ({count}개 행 확인)"}
+            else:
+                results["google_sheets"] = {"ok": False, "msg": "API 키 없음"}
+        except Exception as e:
+            results["google_sheets"] = {"ok": False, "msg": str(e)}
 
     return jsonify(results)
 
