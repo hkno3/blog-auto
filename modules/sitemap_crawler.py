@@ -7,6 +7,7 @@
 import re
 import random
 import requests
+from urllib.parse import unquote
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 from config import get_api_key
@@ -59,6 +60,7 @@ def _slug_to_title(url: str) -> str:
     try:
         path = url.rstrip("/").split("/")[-1]
         path = path.split("?")[0].split("#")[0]  # 쿼리스트링/앵커 제거
+        path = unquote(path)                      # URL 인코딩 디코딩 (%eb%af... → 한글)
         path = re.sub(r"\.\w+$", "", path)        # 확장자 제거
         title = re.sub(r"[-_]+", " ", path).strip()
         return title if len(title) > 2 else ""
@@ -196,7 +198,7 @@ def insert_external_links(content: str, keyword: str = "") -> str:
 
     soup = BeautifulSoup(content, "html.parser")
 
-    # ── 문단별 인라인 링크 ────────────────────────────
+    # ── 문단 뒤 별도 링크 문단 삽입 ─────────────────────
     used_urls = set()
     inline_count = 0
     for p in soup.find_all("p"):
@@ -207,12 +209,13 @@ def insert_external_links(content: str, keyword: str = "") -> str:
         for link in links:
             if link["url"] in used_urls or link["score"] < 0.08:
                 continue
-            link_tag = soup.new_tag(
-                "a", href=link["url"], target="_blank", rel="noopener noreferrer",
-                style="color:#1a73e8;text-decoration:underline;"
+            title = link["title"] or "관련 글 보기"
+            link_p = BeautifulSoup(
+                f'<p><a href="{link["url"]}" target="_blank" rel="noopener noreferrer"'
+                f' style="color:#1a73e8;text-decoration:underline;">{title}</a></p>',
+                "html.parser"
             )
-            link_tag.string = f" → {link['title'] or '관련 글 보기'}"
-            p.append(link_tag)
+            p.insert_after(link_p)
             used_urls.add(link["url"])
             inline_count += 1
             break
