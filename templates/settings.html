@@ -76,6 +76,20 @@
       </a>
     </small>
   </div>
+
+  <div class="form-group">
+    <label>Google Sheets API Key <span class="required">*외부 링크 필수</span></label>
+    <div class="input-with-btn">
+      <input type="password" id="google_sheets_key" value="{{ config.google_sheets_key }}"
+             placeholder="AIza...">
+      <button class="btn-secondary" onclick="testApi('google_sheets')">연결 테스트</button>
+    </div>
+    <div id="google_sheets-result" class="api-result"></div>
+    <small>
+      Google Cloud Console → API 및 서비스 → 사용자 인증 정보 → API 키 생성<br>
+      Google Sheets API 활성화 필요 (기존 Blogger 프로젝트에 추가 가능)
+    </small>
+  </div>
 </div>
 
 <!-- 네이버 API 설정 -->
@@ -181,6 +195,7 @@ async function saveSettings() {
     unsplash_key: document.getElementById('unsplash_key').value,
     pexels_key: document.getElementById('pexels_key').value,
     pixabay_key: document.getElementById('pixabay_key').value,
+    google_sheets_key: document.getElementById('google_sheets_key').value,
     naver_ad_customer_id: document.getElementById('naver_ad_customer_id').value,
     naver_ad_license: document.getElementById('naver_ad_license').value,
     naver_ad_secret: document.getElementById('naver_ad_secret').value,
