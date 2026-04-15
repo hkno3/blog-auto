@@ -34,7 +34,11 @@ def index():
     today_usage = usage_list[0] if usage_list else {"request_count": 0, "total_tokens": 0}
     writing_style = get_setting("writing_style") or "친근하고 정보성 있는 블로그 말투"
     return render_template("index.html", posts=posts, logs=logs, auth=auth, stats=stats,
-                           gemini_today=today_usage, writing_style=writing_style)
+                           gemini_today=today_usage,
+                           writing_style=writing_style,
+                           post_interval_minutes=get_setting("post_interval_minutes") or 60,
+                           image_count=get_setting("image_count") or 5,
+                           min_content_length=get_setting("min_content_length") or 800)
 
 
 @app.route("/api/gemini-usage")
