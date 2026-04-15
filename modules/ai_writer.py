@@ -3,6 +3,7 @@ AI 글쓰기 모듈 - Gemini API (무료 티어)
 SEO 최적화 구조로 글 생성
 """
 import re
+import time
 from google import genai
 from config import get_api_key, get_setting
 from database.db import add_log, record_gemini_usage
@@ -113,34 +114,50 @@ def generate_post(keyword: str, style: str = "") -> dict:
     """
     키워드로 SEO 최적화 글 생성
     반환: {title, meta, content, tags, category}
+    503 과부하 시 최대 4회 재시도 (10→20→40→60초 간격)
     """
     add_log(f"AI 글쓰기 시작: {keyword}")
-    try:
-        client = _get_client()
-        prompt = _build_prompt(keyword, style)
-        response = client.models.generate_content(
-            model="gemini-2.5-flash", contents=prompt
-        )
-        text = response.text
+    retry_delays = [10, 20, 40, 60]
+    last_error = None
 
-        # 토큰 사용량 기록
-        usage = getattr(response, "usage_metadata", None)
-        if usage:
-            pt = getattr(usage, "prompt_token_count", 0) or 0
-            ct = getattr(usage, "candidates_token_count", 0) or 0
-            tt = getattr(usage, "total_token_count", 0) or (pt + ct)
-            record_gemini_usage(pt, ct, tt)
-            add_log(f"Gemini 토큰 사용: 입력 {pt} + 출력 {ct} = {tt}개")
+    for attempt in range(len(retry_delays) + 1):
+        try:
+            client = _get_client()
+            prompt = _build_prompt(keyword, style)
+            response = client.models.generate_content(
+                model="gemini-2.5-flash", contents=prompt
+            )
+            text = response.text
 
-        result = _parse_response(text, keyword)
-        _validate_content(result, keyword)
+            # 토큰 사용량 기록
+            usage = getattr(response, "usage_metadata", None)
+            if usage:
+                pt = getattr(usage, "prompt_token_count", 0) or 0
+                ct = getattr(usage, "candidates_token_count", 0) or 0
+                tt = getattr(usage, "total_token_count", 0) or (pt + ct)
+                record_gemini_usage(pt, ct, tt)
+                add_log(f"Gemini 토큰 사용: 입력 {pt} + 출력 {ct} = {tt}개")
 
-        add_log(f"AI 글쓰기 완료: {result['title']}")
-        return result
+            result = _parse_response(text, keyword)
+            _validate_content(result, keyword)
 
-    except Exception as e:
-        add_log(f"AI 글쓰기 실패 ({keyword}): {e}", "ERROR")
-        raise
+            add_log(f"AI 글쓰기 완료: {result['title']}")
+            return result
+
+        except Exception as e:
+            last_error = e
+            err_str = str(e)
+            # 503 과부하 오류만 재시도
+            if "503" in err_str and attempt < len(retry_delays):
+                delay = retry_delays[attempt]
+                add_log(f"Gemini 503 과부하 - {delay}초 후 재시도 ({attempt + 1}/{len(retry_delays)})", "WARN")
+                time.sleep(delay)
+            else:
+                add_log(f"AI 글쓰기 실패 ({keyword}): {e}", "ERROR")
+                raise
+
+    add_log(f"AI 글쓰기 최종 실패 ({keyword}): {last_error}", "ERROR")
+    raise last_error
 
 
 def _parse_response(text: str, keyword: str) -> dict:
