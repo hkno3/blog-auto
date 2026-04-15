@@ -17,29 +17,54 @@ from database.db import add_log
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
-# 키워드에 포함되면 제외할 패턴 (부처명·행정용어·고유명사 등)
+# 노이즈 패턴: keyword_fetcher와 동일하게 유지
 _NOISE_PATTERNS = re.compile(
     r"위원회|위원장|부위원장|장관|차관|청장|국장|과장|대변인|대표단|"
     r"국방부|외교부|법무부|행안부|기재부|복지부|환경부|교육부|문체부|농림부|"
     r"산업부|중기부|과기부|통일부|여가부|국토부|해수부|고용부|보건부|"
-    r"과학기술정보통신부|중소벤처기업부|장애인정책조정|규제합리화|"
-    r"전체회의|보도참고|보도자료|브리핑|접견|위촉|간담회|협약식|업무협약|"
+    r"금융위|공정위|방통위|선관위|감사원|헌법재판소|"
+    r"고용노동부|국토교통부|농림축산식품부|해양수산부|보건복지부|"
+    r"과학기술정보통신부|중소벤처기업부|개인정보보호위원회|"
+    r"전체회의|보도참고|보도자료|보도설명|브리핑|접견|위촉|간담회|협약식|업무협약|"
     r"현안점검|점검회의|당정|정무위|국감|국정감사|예결위|"
     r"박람회|엑스포|시상식|공청회|포럼|세미나|학술대회|"
-    r"에스코트|릴레이|축사|기념사|치사|"
     r"발대식|출범식|개막식|폐막식|착공식|준공식|"
     r"추경|예산안|법안|개정안|시행령|고시|"
-    r"[A-Z]{2,}\s*\d+|quot"
+    r"quot|nbsp"
+)
+
+_TITLE_PREFIX_STRIP = re.compile(
+    r"^(?:\[.+?\]|【.+?】|〔.+?〕|「.+?」|\(.+?\)|\d+\.\s*|\d+위\s*|\d+일\s*|\d+월\s*)+"
+)
+_TITLE_SUFFIX_STRIP = re.compile(
+    r"[\s]*(한다|됩니다|밝혀|나서|발표|진행|실시|추진|강화|개최|열려|마련|"
+    r"시행|도입|확대|논의|검토|공개|촉구|요청|통해|위해|따라|관련|예정|"
+    r"완료|성공|실패|기준|현황|전망|분석|비교|정리|총정리).*$"
 )
 
 
+def _extract_keyword_from_title(title: str) -> str:
+    kw = re.sub(r"[^\w\s가-힣]", " ", title)
+    kw = re.sub(r"\s+", " ", kw).strip()
+    kw = _TITLE_PREFIX_STRIP.sub("", kw).strip()
+    kw = _TITLE_SUFFIX_STRIP.sub("", kw).strip()
+    words = kw.split()
+    if len(words) > 4:
+        kw = " ".join(words[:4])
+    elif len(words) < 2:
+        return ""
+    return kw.strip()
+
+
 def _is_good_keyword(kw: str) -> bool:
+    if not kw:
+        return False
     if _NOISE_PATTERNS.search(kw):
         return False
     words = kw.split()
     if not (2 <= len(words) <= 4):
         return False
-    if not re.search(r"[가-힣]", kw):
+    if not re.search(r"[가-힣]{2,}", kw):
         return False
     return True
 
@@ -98,9 +123,8 @@ def fetch_rss_keywords(feeds: list[str], max_per_feed: int = 5, hours: int = 24)
 
                 title_tag = item.find("title")
                 if title_tag is not None and title_tag.text:
-                    kw = re.sub(r"[^\w\s가-힣]", " ", title_tag.text).strip()[:30]
-                    kw = re.sub(r"\s+", " ", kw).strip()
-                    if kw and len(kw) >= 4 and _is_good_keyword(kw) and kw not in keywords:
+                    kw = _extract_keyword_from_title(title_tag.text)
+                    if kw and _is_good_keyword(kw) and kw not in keywords:
                         keywords.append(kw)
                         count += 1
                 if count >= max_per_feed:

@@ -14,23 +14,7 @@ from database.db import add_log
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
 ALL_RSS_FEEDS = [
-    "https://www.korea.kr/rss/policy.xml",
-    "https://www.korea.kr/rss/reporter.xml",
-    "https://www.korea.kr/rss/column.xml",
-    "https://www.korea.kr/rss/insight.xml",
-    "https://www.korea.kr/rss/media.xml",
-    "https://www.korea.kr/rss/shorts.xml",
-    "https://www.korea.kr/rss/visual.xml",
-    "https://www.korea.kr/rss/photo.xml",
-    "https://www.korea.kr/rss/cartoon.xml",
-    "https://www.korea.kr/rss/pressrelease.xml",
-    "https://www.korea.kr/rss/fact.xml",
-    "https://www.korea.kr/rss/ebriefing.xml",
-    "https://www.korea.kr/rss/president.xml",
-    "https://www.korea.kr/rss/cabinet.xml",
-    "https://www.korea.kr/rss/speech.xml",
-    "https://www.korea.kr/rss/expdoc.xml",
-    "https://www.korea.kr/rss/archive.xml",
+    # 건강/의학
     "https://health.chosun.com/rss/healthcaren.xml",
     "https://health.chosun.com/rss/column.xml",
     "https://health.chosun.com/site/data/rss/rss.xml",
@@ -45,38 +29,23 @@ ALL_RSS_FEEDS = [
     "https://kormedi.com/category/medical/feed/",
     "https://kormedi.com/category/opinion/feed/",
     "https://kormedi.com/category/cardnews/feed/",
-    "https://kormedi.com/category/movie/feed/",
     "https://www.mkhealth.co.kr/rss/allArticle.xml",
     # 종합/시사
     "https://news.sbs.co.kr/news/TopicRssFeed.do?plink=RSSREADER",
-    "https://www.yna.co.kr/rss/news.xml",
     "https://www.yna.co.kr/rss/health.xml",
-    "https://www.yna.co.kr/rss/economy.xml",
     "https://rss.donga.com/total.xml",
-    "https://www.hani.co.kr/rss",
-    "https://www.khan.co.kr/rss/rssdata/total_news.xml",
     # 경제/비즈
     "https://www.mk.co.kr/rss/30000001",
     "https://www.hankyung.com/feed/all-news",
     "http://rss.edaily.co.kr/edaily_news.xml",
-    "https://biz.heraldcorp.com/rss/google/newsAll",
     "https://biz.heraldcorp.com/rss/google/economy",
-    "https://biz.heraldcorp.com/rss/google/realestate",
     "https://biz.heraldcorp.com/rss/google/it",
-    "https://biz.heraldcorp.com/rss/google/culture",
     # IT
     "https://feeds.feedburner.com/zdkorea",
     "https://it.chosun.com/rss/allArticle.xml",
     # 식품/유통
     "https://www.thinkfood.co.kr/rss/allArticle.xml",
-    # 보도자료
-    "https://api.newswire.co.kr/rss/all",
-    "https://api.newswire.co.kr/rss/industry/1000",
-    "https://api.newswire.co.kr/rss/industry/900",
-    "https://api.newswire.co.kr/rss/industry/100",
-    "https://api.newswire.co.kr/rss/industry/200",
-    "https://api.newswire.co.kr/rss/industry/1100",
-    # 구글 뉴스
+    # 구글 뉴스 (한국)
     "https://news.google.com/rss?hl=ko&gl=KR&ceid=KR:ko",
 ]
 
@@ -87,39 +56,73 @@ FALLBACK_KEYWORDS = [
     "육아 꿀팁", "아기 이유식", "수면 개선", "면역력 높이는 법",
 ]
 
-# 키워드에 포함되면 제외할 패턴 (부처명·행정용어·고유명사 등)
+# 노이즈 패턴: 포함 시 키워드에서 제외
 _NOISE_PATTERNS = re.compile(
     r"위원회|위원장|부위원장|장관|차관|청장|국장|과장|대변인|대표단|"
     r"국방부|외교부|법무부|행안부|기재부|복지부|환경부|교육부|문체부|농림부|"
     r"산업부|중기부|과기부|통일부|여가부|국토부|해수부|고용부|보건부|"
-    r"과학기술정보통신부|중소벤처기업부|장애인정책조정|규제합리화|"
-    r"전체회의|보도참고|보도자료|브리핑|접견|위촉|간담회|협약식|업무협약|"
+    r"금융위|공정위|방통위|선관위|감사원|헌법재판소|"
+    r"고용노동부|국토교통부|농림축산식품부|해양수산부|보건복지부|"
+    r"과학기술정보통신부|중소벤처기업부|개인정보보호위원회|"
+    r"전체회의|보도참고|보도자료|보도설명|브리핑|접견|위촉|간담회|협약식|업무협약|"
     r"현안점검|점검회의|당정|정무위|국감|국정감사|예결위|"
     r"박람회|엑스포|시상식|공청회|포럼|세미나|학술대회|"
-    r"에스코트|릴레이|축사|기념사|치사|"
     r"발대식|출범식|개막식|폐막식|착공식|준공식|"
     r"추경|예산안|법안|개정안|시행령|고시|"
-    r"[A-Z]{2,}\s*\d+|quot"  # 영문 약어·오류 토큰
+    r"quot|nbsp"
 )
+
+# 제목 앞부분 제거 패턴: 기관명·날짜·번호 등
+_TITLE_PREFIX_STRIP = re.compile(
+    r"^(?:\[.+?\]|【.+?】|〔.+?〕|「.+?」|\(.+?\)|\d+\.\s*|\d+위\s*|\d+일\s*|\d+월\s*)+"
+)
+
+# 제목 뒷부분 제거 패턴: 동사형 어미·접속어 등
+_TITLE_SUFFIX_STRIP = re.compile(
+    r"[\s]*(한다|됩니다|밝혀|나서|발표|진행|실시|추진|강화|개최|열려|마련|"
+    r"시행|도입|확대|논의|검토|공개|촉구|요청|통해|위해|따라|관련|예정|"
+    r"완료|성공|실패|기준|현황|전망|분석|비교|정리|총정리).*$"
+)
+
+
+def _extract_keyword_from_title(title: str) -> str:
+    """뉴스 제목에서 핵심 주제어 추출"""
+    # 특수문자 정리
+    kw = re.sub(r"[^\w\s가-힣]", " ", title)
+    kw = re.sub(r"\s+", " ", kw).strip()
+
+    # 앞부분 노이즈 제거 (기관명·날짜 등)
+    kw = _TITLE_PREFIX_STRIP.sub("", kw).strip()
+
+    # 뒷부분 동사형 어미 제거
+    kw = _TITLE_SUFFIX_STRIP.sub("", kw).strip()
+
+    # 2~4단어만 사용 (앞에서부터)
+    words = kw.split()
+    if len(words) > 4:
+        kw = " ".join(words[:4])
+    elif len(words) < 2:
+        return ""
+
+    return kw.strip()
 
 
 def _is_good_keyword(kw: str) -> bool:
     """검색용 키워드로 적합한지 판단"""
-    # 노이즈 패턴 포함 시 제외
+    if not kw:
+        return False
     if _NOISE_PATTERNS.search(kw):
         return False
-    # 단어 수 필터: 2~4단어 사이여야 자연스러운 검색어
     words = kw.split()
     if not (2 <= len(words) <= 4):
         return False
-    # 한글이 전혀 없으면 제외
-    if not re.search(r"[가-힣]", kw):
+    if not re.search(r"[가-힣]{2,}", kw):
         return False
     return True
 
 
 def _parse_rss(url: str, max_items: int = 3, hours: int = 24) -> list[str]:
-    """RSS에서 제목 추출 (24시간 이내 기사만, 노이즈 필터 적용)"""
+    """RSS에서 핵심 키워드 추출 (24시간 이내 기사만)"""
     try:
         resp = requests.get(url, timeout=8, headers=HEADERS)
         resp.raise_for_status()
@@ -132,7 +135,6 @@ def _parse_rss(url: str, max_items: int = 3, hours: int = 24) -> list[str]:
         cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
         titles = []
         for item in root.findall(".//item"):
-            # pubDate 체크 — 24시간 이전 기사 스킵
             pub_tag = item.find("pubDate")
             if pub_tag is not None and pub_tag.text:
                 try:
@@ -142,15 +144,12 @@ def _parse_rss(url: str, max_items: int = 3, hours: int = 24) -> list[str]:
                     if pub_dt < cutoff:
                         continue
                 except Exception:
-                    pass  # 날짜 파싱 실패 시 포함
+                    pass
 
             tag = item.find("title")
             if tag is not None and tag.text:
-                kw = re.sub(r"[^\w\s가-힣]", " ", tag.text).strip()
-                kw = re.sub(r"\s+", " ", kw).strip()
-                if len(kw) > 20:
-                    kw = kw[:20].rsplit(" ", 1)[0]
-                if kw and len(kw) >= 4 and _is_good_keyword(kw):
+                kw = _extract_keyword_from_title(tag.text)
+                if _is_good_keyword(kw):
                     titles.append(kw)
             if len(titles) >= max_items:
                 break
