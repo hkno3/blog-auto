@@ -17,6 +17,32 @@ from database.db import add_log
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
+# 키워드에 포함되면 제외할 패턴 (부처명·행정용어·고유명사 등)
+_NOISE_PATTERNS = re.compile(
+    r"위원회|위원장|부위원장|장관|차관|청장|국장|과장|대변인|대표단|"
+    r"국방부|외교부|법무부|행안부|기재부|복지부|환경부|교육부|문체부|농림부|"
+    r"산업부|중기부|과기부|통일부|여가부|국토부|해수부|고용부|보건부|"
+    r"과학기술정보통신부|중소벤처기업부|장애인정책조정|규제합리화|"
+    r"전체회의|보도참고|보도자료|브리핑|접견|위촉|간담회|협약식|업무협약|"
+    r"현안점검|점검회의|당정|정무위|국감|국정감사|예결위|"
+    r"박람회|엑스포|시상식|공청회|포럼|세미나|학술대회|"
+    r"에스코트|릴레이|축사|기념사|치사|"
+    r"발대식|출범식|개막식|폐막식|착공식|준공식|"
+    r"추경|예산안|법안|개정안|시행령|고시|"
+    r"[A-Z]{2,}\s*\d+|quot"
+)
+
+
+def _is_good_keyword(kw: str) -> bool:
+    if _NOISE_PATTERNS.search(kw):
+        return False
+    words = kw.split()
+    if not (2 <= len(words) <= 4):
+        return False
+    if not re.search(r"[가-힣]", kw):
+        return False
+    return True
+
 # ─── RSS 피드 목록 ────────────────────────────────────
 
 HEALTH_RSS = [
@@ -74,7 +100,7 @@ def fetch_rss_keywords(feeds: list[str], max_per_feed: int = 5, hours: int = 24)
                 if title_tag is not None and title_tag.text:
                     kw = re.sub(r"[^\w\s가-힣]", " ", title_tag.text).strip()[:30]
                     kw = re.sub(r"\s+", " ", kw).strip()
-                    if kw and len(kw) >= 4 and kw not in keywords:
+                    if kw and len(kw) >= 4 and _is_good_keyword(kw) and kw not in keywords:
                         keywords.append(kw)
                         count += 1
                 if count >= max_per_feed:

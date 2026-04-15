@@ -87,9 +87,39 @@ FALLBACK_KEYWORDS = [
     "육아 꿀팁", "아기 이유식", "수면 개선", "면역력 높이는 법",
 ]
 
+# 키워드에 포함되면 제외할 패턴 (부처명·행정용어·고유명사 등)
+_NOISE_PATTERNS = re.compile(
+    r"위원회|위원장|부위원장|장관|차관|청장|국장|과장|대변인|대표단|"
+    r"국방부|외교부|법무부|행안부|기재부|복지부|환경부|교육부|문체부|농림부|"
+    r"산업부|중기부|과기부|통일부|여가부|국토부|해수부|고용부|보건부|"
+    r"과학기술정보통신부|중소벤처기업부|장애인정책조정|규제합리화|"
+    r"전체회의|보도참고|보도자료|브리핑|접견|위촉|간담회|협약식|업무협약|"
+    r"현안점검|점검회의|당정|정무위|국감|국정감사|예결위|"
+    r"박람회|엑스포|시상식|공청회|포럼|세미나|학술대회|"
+    r"에스코트|릴레이|축사|기념사|치사|"
+    r"발대식|출범식|개막식|폐막식|착공식|준공식|"
+    r"추경|예산안|법안|개정안|시행령|고시|"
+    r"[A-Z]{2,}\s*\d+|quot"  # 영문 약어·오류 토큰
+)
+
+
+def _is_good_keyword(kw: str) -> bool:
+    """검색용 키워드로 적합한지 판단"""
+    # 노이즈 패턴 포함 시 제외
+    if _NOISE_PATTERNS.search(kw):
+        return False
+    # 단어 수 필터: 2~4단어 사이여야 자연스러운 검색어
+    words = kw.split()
+    if not (2 <= len(words) <= 4):
+        return False
+    # 한글이 전혀 없으면 제외
+    if not re.search(r"[가-힣]", kw):
+        return False
+    return True
+
 
 def _parse_rss(url: str, max_items: int = 3, hours: int = 24) -> list[str]:
-    """RSS에서 제목 추출 (24시간 이내 기사만)"""
+    """RSS에서 제목 추출 (24시간 이내 기사만, 노이즈 필터 적용)"""
     try:
         resp = requests.get(url, timeout=8, headers=HEADERS)
         resp.raise_for_status()
@@ -120,7 +150,7 @@ def _parse_rss(url: str, max_items: int = 3, hours: int = 24) -> list[str]:
                 kw = re.sub(r"\s+", " ", kw).strip()
                 if len(kw) > 20:
                     kw = kw[:20].rsplit(" ", 1)[0]
-                if kw and len(kw) >= 4:
+                if kw and len(kw) >= 4 and _is_good_keyword(kw):
                     titles.append(kw)
             if len(titles) >= max_items:
                 break
