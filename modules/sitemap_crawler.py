@@ -218,7 +218,7 @@ def find_related_links(paragraph: str, top_n: int = 2) -> list[dict]:
     for e in all_entries:
         search_text = f"{e['title']} {e.get('description', '')}"
         score = _similarity_score(paragraph, search_text)
-        if score > 0.05:
+        if score > 0.30:
             scored.append({**e, "score": score})
 
     scored.sort(key=lambda x: x["score"], reverse=True)
@@ -265,7 +265,7 @@ def insert_external_links(content: str, keyword: str = "") -> str:
         links = find_related_links(text, top_n=3)
         chosen = None
         for link in links:
-            if link["url"] not in used_urls and link["score"] >= 0.10:
+            if link["url"] not in used_urls and link["score"] >= 0.30:
                 chosen = link
                 break
         if not chosen:
@@ -322,7 +322,7 @@ def _get_related_links_for_footer(keyword: str, exclude_urls: set, count: int = 
         if e["url"] in exclude_urls or not e.get("url"):
             continue
         score = _similarity_score(keyword, e.get("title", ""))
-        if score >= 0.10:
+        if score >= 0.30:
             scored.append({**e, "site": target_site, "score": score})
 
     scored.sort(key=lambda x: x["score"], reverse=True)
