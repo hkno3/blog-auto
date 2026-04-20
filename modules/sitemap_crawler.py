@@ -205,10 +205,12 @@ def _similarity_score(text1: str, text2: str) -> float:
     return len(t1 & t2) / max(len(t1), len(t2))
 
 
-def find_related_links(paragraph: str, top_n: int = 2) -> list[dict]:
-    """문단 내용과 유사한 외부 링크 찾기"""
+def find_related_links(paragraph: str, top_n: int = 2, site: str = None) -> list[dict]:
+    """문단 내용과 유사한 외부 링크 찾기 (site 지정 시 해당 사이트만 검색)"""
     all_entries = []
     for site_info in TARGET_SITES:
+        if site and site_info["name"] != site:
+            continue
         entries = _load_cache(site_info["name"])
         for e in entries:
             e["site"] = site_info["name"]
@@ -218,7 +220,7 @@ def find_related_links(paragraph: str, top_n: int = 2) -> list[dict]:
     for e in all_entries:
         search_text = f"{e['title']} {e.get('description', '')}"
         score = _similarity_score(paragraph, search_text)
-        if score > 0.30:
+        if score > 0.50:
             scored.append({**e, "score": score})
 
     scored.sort(key=lambda x: x["score"], reverse=True)
@@ -232,15 +234,16 @@ def insert_external_links(content: str, keyword: str = "") -> str:
     """
     refresh_feed_cache()  # 캐시 만료 시에만 갱신
 
+    # 키워드 기반 대상 사이트 결정
+    target_site = _detect_site_for_keyword(keyword) if keyword else "bodyandwell"
+    add_log(f"인라인 링크 대상 사이트: {target_site}")
+
     soup = BeautifulSoup(content, "html.parser")
 
     # ── 문단 뒤 버튼 링크 삽입 (3구간에 띄엄띄엄) ────────
-    all_entries = []
-    for site_info in TARGET_SITES:
-        entries = _load_cache(site_info["name"])
-        for e in entries:
-            e["site"] = site_info["name"]
-        all_entries += entries
+    all_entries = _load_cache(target_site)
+    for e in all_entries:
+        e["site"] = target_site
 
     # 50자 이상 문단만 추출
     all_paras = [p for p in soup.find_all("p") if len(p.get_text()) >= 50]
@@ -262,10 +265,10 @@ def insert_external_links(content: str, keyword: str = "") -> str:
         text = p.get_text()
 
         # 유사도 상위 링크 찾기, 없으면 랜덤
-        links = find_related_links(text, top_n=3)
+        links = find_related_links(text, top_n=3, site=target_site)
         chosen = None
         for link in links:
-            if link["url"] not in used_urls and link["score"] >= 0.30:
+            if link["url"] not in used_urls and link["score"] >= 0.50:
                 chosen = link
                 break
         if not chosen:
@@ -322,7 +325,7 @@ def _get_related_links_for_footer(keyword: str, exclude_urls: set, count: int = 
         if e["url"] in exclude_urls or not e.get("url"):
             continue
         score = _similarity_score(keyword, e.get("title", ""))
-        if score >= 0.30:
+        if score >= 0.50:
             scored.append({**e, "site": target_site, "score": score})
 
     scored.sort(key=lambda x: x["score"], reverse=True)
