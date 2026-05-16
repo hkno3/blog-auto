@@ -118,6 +118,7 @@ def run_batch(
     count: int = 1,
     interval_minutes: int = 60,
     scheduled: bool = False,
+    start_time: str = None,
     settings: dict = None,
 ):
     """
@@ -142,15 +143,26 @@ def run_batch(
         for kw in kws:
             jobs.append({"keyword": kw, "fixed_title": None})
 
+    # 예약 시작 기준 시간 파싱
+    base_dt = None
+    if scheduled:
+        if start_time:
+            try:
+                base_dt = datetime.fromisoformat(start_time.replace("Z", ""))
+            except Exception:
+                base_dt = None
+        if base_dt is None:
+            base_dt = datetime.now()
+
     add_log(f"배치 시작: 총 {len(jobs)}개 (확정제목 {len(titles or [])}개 + 키워드 {len(keywords or [])}개), "
-            f"{'예약 ' + str(interval_minutes) + '분 간격' if scheduled else '즉시 발행'}")
+            f"{'예약 ' + str(interval_minutes) + '분 간격 (시작: ' + (base_dt.strftime('%m/%d %H:%M') if base_dt else '?') + ')' if scheduled else '즉시 발행'}")
     results = []
 
     for i, job in enumerate(jobs):
         sched_at = None
         if scheduled:
-            base = datetime.now() + timedelta(minutes=interval_minutes * (i + 1))
-            sched_at = base.strftime("%Y-%m-%dT%H:%M:%S+09:00")
+            sched_dt = base_dt + timedelta(minutes=interval_minutes * (i + 1))
+            sched_at = sched_dt.strftime("%Y-%m-%dT%H:%M:%S+09:00")
 
         result = run_single_post(
             keyword=job["keyword"],

@@ -5,7 +5,7 @@ import threading
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 
 from config import get_api_key, set_api_key, get_setting, set_setting
-from database.db import init_db, get_posts, get_logs, add_log, get_gemini_usage
+from database.db import init_db, get_posts, get_logs, add_log, get_gemini_usage, get_scheduled_info
 from modules.keyword_fetcher import get_fresh_keywords, _get_naver_autocomplete, _get_naver_related, _get_google_autocomplete
 from modules.blogger_uploader import check_auth_status
 from modules.scheduler import run_single_post, run_batch
@@ -81,6 +81,7 @@ def run_scheduled():
     keywords = data.get("keywords", [])
     titles = data.get("titles", [])
     interval = int(data.get("interval_minutes", 60))
+    start_time = data.get("start_time", None)  # "2026-05-17T09:00" 형식
     count = len(keywords) + len(titles) or int(data.get("count", 1))
 
     settings = {
@@ -91,7 +92,8 @@ def run_scheduled():
 
     def _run():
         run_batch(keywords=keywords or None, titles=titles or None, count=count,
-                  interval_minutes=interval, scheduled=True, settings=settings)
+                  interval_minutes=interval, scheduled=True,
+                  start_time=start_time, settings=settings)
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
@@ -435,6 +437,11 @@ def logs_page():
 def api_logs():
     logs = get_logs(50)
     return jsonify({"logs": logs})
+
+
+@app.route("/api/scheduled-info")
+def api_scheduled_info():
+    return jsonify(get_scheduled_info())
 
 
 @app.route("/api/posts")

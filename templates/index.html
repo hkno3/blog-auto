@@ -98,8 +98,9 @@
         <button class="btn-tab" data-cat="투자"    onclick="switchTab('투자')"   >📈 투자</button>
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
-        <span id="check-counter" style="font-size:0.82em;color:#7c3aed;font-weight:600;display:none;">
-          선택: <span id="check-count">0</span>/5
+        <span id="check-counter" style="display:none;align-items:center;gap:6px;">
+          <span style="font-size:0.82em;color:#7c3aed;font-weight:600;">선택: <span id="check-count">0</span>/5</span>
+          <button onclick="clearAllChecks()" style="background:none;border:1px solid #c4b5fd;border-radius:4px;cursor:pointer;font-size:0.75em;color:#7c3aed;padding:2px 7px;">전체 해제</button>
         </span>
         <button id="btn-gen-titles" onclick="generateTitles()"
                 style="display:none;background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:0.85em;cursor:pointer;font-weight:600;">
@@ -153,8 +154,34 @@
       ▶ 지금 바로 글쓰기 시작
     </button>
     <button class="btn-schedule btn-large" onclick="runEveryInterval()">
-      🕐 <span id="interval-label">{{ post_interval_minutes }}</span>분 마다 글 예약하기
+      🕐 예약 글쓰기
     </button>
+  </div>
+
+  <!-- 예약 설정 패널 -->
+  <div id="schedule-panel" style="display:none;margin-top:10px;border:1px solid #d1fae5;border-radius:8px;overflow:hidden;">
+    <div style="background:#ecfdf5;padding:8px 14px;border-bottom:1px solid #d1fae5;display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-size:0.85em;font-weight:600;color:#065f46;">예약 설정</span>
+      <span id="scheduled-status" style="font-size:0.8em;color:#6b7280;"></span>
+    </div>
+    <div style="padding:12px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label style="font-size:0.78em;color:#6b7280;font-weight:600;">예약 시작 시간</label>
+        <input type="datetime-local" id="schedule-start-time"
+               style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:0.88em;color:#1e293b;">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label style="font-size:0.78em;color:#6b7280;font-weight:600;">발행 간격</label>
+        <span style="font-size:0.88em;color:#374151;padding:6px 0;">
+          <span id="interval-label">{{ post_interval_minutes }}</span>분 간격
+          <span style="font-size:0.75em;color:#9ca3af;">(글쓰기 설정에서 변경)</span>
+        </span>
+      </div>
+      <button onclick="confirmSchedule()"
+              style="margin-top:18px;background:#059669;color:#fff;border:none;border-radius:6px;padding:8px 20px;font-size:0.88em;cursor:pointer;font-weight:600;white-space:nowrap;">
+        ✅ 이 시간으로 예약하기
+      </button>
+    </div>
   </div>
 
   <!-- 글쓰기 설정 -->
@@ -430,8 +457,17 @@ function updateCheckCounter() {
   const countEl = document.getElementById('check-count');
   const btnGen = document.getElementById('btn-gen-titles');
   countEl.textContent = total;
-  counter.style.display = total > 0 ? 'inline' : 'none';
+  counter.style.display = total > 0 ? 'flex' : 'none';
   btnGen.style.display = total > 0 ? 'inline-block' : 'none';
+}
+
+function clearAllChecks() {
+  for (const cat of Object.keys(tabCache)) {
+    tabCache[cat].checkedKeys.clear();
+  }
+  // 현재 보이는 탭의 체크박스 UI도 해제
+  document.querySelectorAll('.tab-panel input[type="checkbox"]').forEach(cb => cb.checked = false);
+  updateCheckCounter();
 }
 
 function toggleArticleCheck(cat, idx, checkbox) {
@@ -653,10 +689,54 @@ async function runNow() {
 
 // ─── 예약 실행 ────────────────────────────────────────
 async function runEveryInterval() {
+  const panel = document.getElementById('schedule-panel');
+  const isOpen = panel.style.display !== 'none';
+  if (isOpen) {
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = 'block';
+  await loadScheduledInfo();
+}
+
+async function loadScheduledInfo() {
+  try {
+    const res = await fetch('/api/scheduled-info');
+    const data = await res.json();
+    const statusEl = document.getElementById('scheduled-status');
+    const input = document.getElementById('schedule-start-time');
+    const interval = parseInt(document.getElementById('post_interval_minutes').value) || 60;
+
+    if (data.count > 0 && data.last_at) {
+      // 마지막 예약 시간 + 간격을 기본값으로
+      const lastDt = new Date(data.last_at.replace(' ', 'T'));
+      const nextDt = new Date(lastDt.getTime() + interval * 60 * 1000);
+      const fmt = d => `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+      statusEl.textContent = `현재 예약된 글 ${data.count}개 | 마지막 예약: ${fmt(lastDt)}`;
+      // datetime-local 형식으로 변환
+      input.value = nextDt.toISOString().slice(0, 16);
+    } else {
+      statusEl.textContent = '예약된 글 없음';
+      // 지금 + 간격을 기본값으로
+      const now = new Date(Date.now() + interval * 60 * 1000);
+      input.value = now.toISOString().slice(0, 16);
+    }
+  } catch(e) {
+    document.getElementById('scheduled-status').textContent = '현황 조회 실패';
+  }
+}
+
+async function confirmSchedule() {
   const keywords = getKeywordsToRun();
   const titles = [...titleQueue];
   const settings = getWritingSettings();
   const count = keywords.length + titles.length || 1;
+  const startTime = document.getElementById('schedule-start-time').value;
+
+  if (!startTime) {
+    showToast('예약 시작 시간을 선택해주세요.', 'error');
+    return;
+  }
 
   const res = await fetch('/run/scheduled', {
     method: 'POST',
@@ -665,12 +745,14 @@ async function runEveryInterval() {
       keywords,
       titles,
       count,
+      start_time: startTime,
       interval_minutes: settings.interval_minutes,
       ...settings
     })
   });
   const data = await res.json();
   showToast(data.message, data.success ? 'success' : 'error');
+  document.getElementById('schedule-panel').style.display = 'none';
   showProgress();
   startLogPolling();
 }
