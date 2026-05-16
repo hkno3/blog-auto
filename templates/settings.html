@@ -221,10 +221,26 @@ async function testApi(name) {
   const el = document.getElementById(resultId);
   el.innerHTML = '테스트 중...';
 
+  // 폼에 입력된 현재 값도 함께 전송 (저장 전에도 테스트 가능)
+  const payload = { api: name };
+  const fieldMap = {
+    gemini: ['gemini_key'],
+    pexels: ['pexels_key'],
+    pixabay: ['pixabay_key'],
+    unsplash: ['unsplash_key'],
+    google_sheets: ['google_sheets_key'],
+    naver: ['naver_client_id', 'naver_client_secret'],
+  };
+  const fields = fieldMap[name] || [];
+  fields.forEach(f => {
+    const el = document.getElementById(f);
+    if (el && el.value && el.value !== '****') payload[f] = el.value;
+  });
+
   const res = await fetch('/settings/test-api', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({api: name})
+    body: JSON.stringify(payload)
   });
   const data = await res.json();
 

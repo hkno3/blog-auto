@@ -311,8 +311,8 @@ def test_api():
     if api_name in ("naver", "all"):
         try:
             import requests as req
-            client_id = get_api_key("naver_client_id")
-            client_secret = get_api_key("naver_client_secret")
+            client_id = data.get("naver_client_id") or get_api_key("naver_client_id")
+            client_secret = data.get("naver_client_secret") or get_api_key("naver_client_secret")
             if client_id and client_secret:
                 r = req.get(
                     "https://openapi.naver.com/v1/search/news.json",
