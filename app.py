@@ -10,7 +10,6 @@ from modules.keyword_fetcher import get_fresh_keywords, _get_naver_autocomplete,
 from modules.blogger_uploader import check_auth_status
 from modules.scheduler import run_single_post, run_batch
 from modules.keyword_analyzer import analyze_keywords
-from modules.celebrity_fetcher import get_celebrity_keywords
 
 app = Flask(__name__)
 app.secret_key = "blog-auto-secret-2024"
@@ -209,15 +208,6 @@ def api_generate_titles():
 
 # ─── 유명인 키워드 ────────────────────────────────────
 
-@app.route("/api/keywords/celebrity")
-def api_keywords_celebrity():
-    count = int(request.args.get("count", 20))
-    try:
-        keywords = get_celebrity_keywords(count=count)
-        return jsonify({"keywords": keywords})
-    except Exception as e:
-        add_log(f"유명인 키워드 수집 오류: {e}", "ERROR")
-        return jsonify({"keywords": [], "error": str(e)})
 
 
 # ─── 수익형 키워드 분석 ────────────────────────────────
