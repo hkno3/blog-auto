@@ -380,16 +380,12 @@ async function searchCategoryNews(category) {
       return;
     }
 
-    // 검색량 맵
-    const volumes = data.volumes || {};
-
     // 헤더
     let html = `
-      <div style="display:grid;grid-template-columns:50px 1fr 90px 100px;gap:0;background:#f8fafc;border-bottom:1px solid #e2e8f0;font-size:0.8em;font-weight:600;color:#64748b;">
+      <div style="display:grid;grid-template-columns:56px 1fr 90px;background:#f8fafc;border-bottom:2px solid #e2e8f0;font-size:0.8em;font-weight:600;color:#64748b;">
         <div style="padding:8px 10px;">유형</div>
         <div style="padding:8px 10px;">제목</div>
         <div style="padding:8px 10px;text-align:center;">발행일</div>
-        <div style="padding:8px 10px;text-align:right;">월간검색량</div>
       </div>`;
 
     html += data.articles.map((item, i) => {
@@ -397,16 +393,11 @@ async function searchCategoryNews(category) {
       const bgColor = i % 2 === 0 ? '#fff' : '#fafafa';
       const typeBg = isNews ? '#dbeafe' : '#f0fdf4';
       const typeColor = isNews ? '#1d4ed8' : '#15803d';
-      const vol = volumes[item.query];
-      const volStr = vol !== undefined
-        ? (vol === 0 ? '<1' : vol.toLocaleString())
-        : '-';
-      const volColor = vol > 10000 ? '#dc2626' : vol > 3000 ? '#d97706' : '#64748b';
 
       return `
-        <div style="display:grid;grid-template-columns:50px 1fr 90px 100px;gap:0;background:${bgColor};border-bottom:1px solid #f1f5f9;align-items:center;">
+        <div style="display:grid;grid-template-columns:56px 1fr 90px;background:${bgColor};border-bottom:1px solid #f1f5f9;align-items:center;">
           <div style="padding:9px 10px;">
-            <span style="font-size:0.72em;padding:2px 6px;border-radius:8px;background:${typeBg};color:${typeColor};">${item.type}</span>
+            <span style="display:inline-block;font-size:0.72em;padding:3px 7px;border-radius:8px;white-space:nowrap;background:${typeBg};color:${typeColor};font-weight:600;">${item.type}</span>
           </div>
           <div style="padding:9px 10px;">
             <a href="${item.link}" target="_blank"
@@ -415,11 +406,8 @@ async function searchCategoryNews(category) {
               ${item.title}
             </a>
           </div>
-          <div style="padding:9px 10px;text-align:center;font-size:0.82em;color:#94a3b8;">
+          <div style="padding:9px 10px;text-align:center;font-size:0.82em;color:#94a3b8;white-space:nowrap;">
             ${item.pubDate || '-'}
-          </div>
-          <div style="padding:9px 10px;text-align:right;font-size:0.85em;font-weight:600;color:${volColor};">
-            ${volStr}
           </div>
         </div>`;
     }).join('');

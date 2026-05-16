@@ -47,16 +47,14 @@ def _strip_html(text: str) -> str:
 
 
 def _parse_date(date_str: str) -> str:
-    """다양한 날짜 형식 → YYYY-MM-DD"""
+    """다양한 날짜 형식 → YYYY.MM.DD"""
     if not date_str:
         return ""
-    # 블로그: "20260516" 형식
     if re.match(r"^\d{8}$", date_str):
-        return f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
-    # 뉴스: RFC 2822 형식 "Mon, 16 May 2026 10:30:00 +0900"
+        return f"{date_str[:4]}.{date_str[4:6]}.{date_str[6:]}"
     try:
         dt = email.utils.parsedate_to_datetime(date_str)
-        return dt.strftime("%Y-%m-%d")
+        return dt.strftime("%Y.%m.%d")
     except Exception:
         return date_str[:10]
 
@@ -118,31 +116,30 @@ def search_naver_blog(keyword: str, display: int = MAX_ARTICLES) -> list[dict]:
         return []
 
 
-def search_celebrity_category(category: str, display_per_query: int = 20) -> list[dict]:
+def search_celebrity_category(category: str, max_total: int = 150) -> list[dict]:
     """
-    유명인 + 카테고리 뉴스/블로그 검색
+    유명인 + 카테고리 뉴스/블로그 검색 (최대 max_total개, 최신순)
     반환: [{type, title, link, pubDate, query}]
     """
     queries = CATEGORY_QUERIES.get(category, [f"연예인 {category}"])
+    display_per_query = min(100, max(20, max_total // len(queries) + 10))
     seen_titles = set()
     results = []
 
     for query in queries:
-        # 뉴스
         for item in search_naver_news(query, display=display_per_query):
             t = item["title"]
             if t and t not in seen_titles:
                 seen_titles.add(t)
                 results.append({**item, "type": "뉴스", "query": query})
-        # 블로그
         for item in search_naver_blog(query, display=display_per_query // 2):
             t = item["title"]
             if t and t not in seen_titles:
                 seen_titles.add(t)
                 results.append({**item, "type": "블로그", "query": query})
 
-    # 날짜 최신순 정렬
     results.sort(key=lambda x: x.get("pubDate", ""), reverse=True)
+    results = results[:max_total]
     add_log(f"카테고리 [{category}] 검색: {len(results)}건")
     return results
 
