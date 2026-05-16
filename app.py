@@ -153,25 +153,22 @@ def api_research_titles():
 
 @app.route("/api/research/category-news")
 def api_research_category_news():
-    """유명인 + 카테고리 뉴스/블로그 + 검색량 조회"""
+    """유명인 + 카테고리 뉴스/블로그 조회"""
     category = request.args.get("category", "").strip()
     if not category:
         return jsonify({"error": "카테고리 필요"}), 400
 
-    from modules.content_researcher import search_celebrity_category, get_search_volumes, CATEGORY_QUERIES
-
-    articles = search_celebrity_category(category, display_per_query=20)
-
-    # 검색 쿼리들의 검색량 조회 (기사 제목별 X, 쿼리 키워드 기준)
-    queries = CATEGORY_QUERIES.get(category, [])
-    volumes = get_search_volumes(queries) if queries else {}
-
-    return jsonify({
-        "category": category,
-        "total": len(articles),
-        "articles": articles,
-        "volumes": volumes,
-    })
+    try:
+        from modules.content_researcher import search_celebrity_category
+        articles = search_celebrity_category(category, max_total=150)
+        return jsonify({
+            "category": category,
+            "total": len(articles),
+            "articles": articles,
+        })
+    except Exception as e:
+        add_log(f"카테고리 뉴스 오류: {e}", "ERROR")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/research/categories")
