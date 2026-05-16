@@ -51,7 +51,22 @@ _MONTHS = {
     "Jul":"07","Aug":"08","Sep":"09","Oct":"10","Nov":"11","Dec":"12",
 }
 
-def _parse_date(date_str: str) -> str:
+def _date_sortkey(date_str: str) -> str:
+    """정렬용 YYYYMMDD 문자열 반환"""
+    if not date_str:
+        return "00000000"
+    if re.match(r"^\d{8}$", date_str):
+        return date_str
+    try:
+        dt = email.utils.parsedate_to_datetime(date_str)
+        return dt.strftime("%Y%m%d%H%M%S")
+    except Exception:
+        pass
+    m = re.search(r"(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})", date_str)
+    if m:
+        day, mon, year = m.group(1), m.group(2)[:3].capitalize(), m.group(3)
+        return f"{year}{_MONTHS.get(mon,'00')}{day.zfill(2)}"
+    return "00000000"
     """다양한 날짜 형식 → YYYY.MM.DD"""
     if not date_str:
         return ""
@@ -151,7 +166,7 @@ def search_celebrity_category(category: str, max_total: int = 150) -> list[dict]
                 seen_titles.add(t)
                 results.append({**item, "type": "블로그", "query": query})
 
-    results.sort(key=lambda x: x.get("pubDate", ""), reverse=True)
+    results.sort(key=lambda x: _date_sortkey(x.get("pubDate", "")), reverse=True)
     results = results[:max_total]
     add_log(f"카테고리 [{category}] 검색: {len(results)}건")
     return results
