@@ -382,7 +382,7 @@ async function searchCategoryNews(category) {
 
     // 헤더
     let html = `
-      <div style="display:grid;grid-template-columns:56px 1fr 90px;background:#f8fafc;border-bottom:2px solid #e2e8f0;font-size:0.8em;font-weight:600;color:#64748b;">
+      <div style="display:grid;grid-template-columns:56px 1fr 100px;background:#f8fafc;border-bottom:2px solid #e2e8f0;font-size:0.8em;font-weight:600;color:#64748b;">
         <div style="padding:8px 10px;">유형</div>
         <div style="padding:8px 10px;">제목</div>
         <div style="padding:8px 10px;text-align:center;">발행일</div>
@@ -395,7 +395,7 @@ async function searchCategoryNews(category) {
       const typeColor = isNews ? '#1d4ed8' : '#15803d';
 
       return `
-        <div style="display:grid;grid-template-columns:56px 1fr 90px;background:${bgColor};border-bottom:1px solid #f1f5f9;align-items:center;">
+        <div style="display:grid;grid-template-columns:56px 1fr 100px;background:${bgColor};border-bottom:1px solid #f1f5f9;align-items:center;">
           <div style="padding:9px 10px;">
             <span style="display:inline-block;font-size:0.72em;padding:3px 7px;border-radius:8px;white-space:nowrap;background:${typeBg};color:${typeColor};font-weight:600;">${item.type}</span>
           </div>
@@ -406,7 +406,7 @@ async function searchCategoryNews(category) {
               ${item.title}
             </a>
           </div>
-          <div style="padding:9px 10px;text-align:center;font-size:0.82em;color:#94a3b8;white-space:nowrap;">
+          <div style="padding:9px 10px;text-align:center;font-size:0.82em;color:#94a3b8;white-space:nowrap;overflow:hidden;">
             ${item.pubDate || '-'}
           </div>
         </div>`;
