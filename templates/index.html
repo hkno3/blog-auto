@@ -98,8 +98,9 @@
         <button class="btn-tab" data-cat="투자"    onclick="switchTab('투자')"   >📈 투자</button>
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
-        <span id="check-counter" style="font-size:0.82em;color:#7c3aed;font-weight:600;display:none;">
-          선택: <span id="check-count">0</span>/5
+        <span id="check-counter" style="display:none;align-items:center;gap:6px;">
+          <span style="font-size:0.82em;color:#7c3aed;font-weight:600;">선택: <span id="check-count">0</span>/5</span>
+          <button onclick="clearAllChecks()" style="background:none;border:1px solid #c4b5fd;border-radius:4px;cursor:pointer;font-size:0.75em;color:#7c3aed;padding:2px 7px;">전체 해제</button>
         </span>
         <button id="btn-gen-titles" onclick="generateTitles()"
                 style="display:none;background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:0.85em;cursor:pointer;font-weight:600;">
@@ -456,8 +457,17 @@ function updateCheckCounter() {
   const countEl = document.getElementById('check-count');
   const btnGen = document.getElementById('btn-gen-titles');
   countEl.textContent = total;
-  counter.style.display = total > 0 ? 'inline' : 'none';
+  counter.style.display = total > 0 ? 'flex' : 'none';
   btnGen.style.display = total > 0 ? 'inline-block' : 'none';
+}
+
+function clearAllChecks() {
+  for (const cat of Object.keys(tabCache)) {
+    tabCache[cat].checkedKeys.clear();
+  }
+  // 현재 보이는 탭의 체크박스 UI도 해제
+  document.querySelectorAll('.tab-panel input[type="checkbox"]').forEach(cb => cb.checked = false);
+  updateCheckCounter();
 }
 
 function toggleArticleCheck(cat, idx, checkbox) {
