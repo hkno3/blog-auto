@@ -16,7 +16,7 @@ def _get_client():
     return genai.Client(api_key=api_key)
 
 
-def _build_prompt(keyword: str, style: str = "", research_context: str = "") -> str:
+def _build_prompt(keyword: str, style: str = "", research_context: str = "", fixed_title: str = "") -> str:
     style_guide = style or get_setting("writing_style") or "친근하고 정보성 있는 블로그 말투"
 
     research_section = ""
@@ -27,9 +27,18 @@ def _build_prompt(keyword: str, style: str = "", research_context: str = "") -> 
 
 """
 
+    title_instruction = ""
+    if fixed_title:
+        title_instruction = f"""
+[제목 고정 - 반드시 준수]
+아래 제목을 그대로 사용하고 변경하지 말 것:
+{fixed_title}
+
+"""
+
     return f"""
 당신은 SEO 전문 블로그 작가입니다.
-{research_section}아래 키워드(포커스 키워드)를 주제로 블로그 글을 작성해주세요.
+{research_section}{title_instruction}아래 키워드(포커스 키워드)를 주제로 블로그 글을 작성해주세요.
 
 [포커스 키워드]
 {keyword}
@@ -119,14 +128,20 @@ def _build_prompt(keyword: str, style: str = "", research_context: str = "") -> 
 """
 
 
-def generate_post(keyword: str, style: str = "", research_context: str = "") -> dict:
+def generate_post(keyword: str, style: str = "", research_context: str = "", fixed_title: str = "") -> dict:
     """
     키워드로 SEO 최적화 글 생성
+    fixed_title: AI 제목 대기열에서 선택한 확정 제목 (옵션) - 제목 고정, 본문만 생성
     research_context: 네이버 검색으로 수집한 참고 자료 (옵션)
     반환: {title, meta, content, tags, category}
     503 과부하 시 최대 4회 재시도 (10→20→40→60초 간격)
     """
-    add_log(f"AI 글쓰기 시작: {keyword}" + (" (리서치 컨텍스트 포함)" if research_context else ""))
+    log_msg = f"AI 글쓰기 시작: {keyword}"
+    if fixed_title:
+        log_msg += f" (확정 제목: {fixed_title})"
+    elif research_context:
+        log_msg += " (리서치 컨텍스트 포함)"
+    add_log(log_msg)
     retry_delays = [10, 20, 40, 60]
     last_error = None
 
@@ -134,7 +149,7 @@ def generate_post(keyword: str, style: str = "", research_context: str = "") -> 
         try:
             from google.genai import types
             client = _get_client()
-            prompt = _build_prompt(keyword, style, research_context)
+            prompt = _build_prompt(keyword, style, research_context, fixed_title)
             # Gemini Grounding: 인터넷 검색으로 최신 정보 보완
             response = client.models.generate_content(
                 model="gemini-2.5-flash",
@@ -155,6 +170,8 @@ def generate_post(keyword: str, style: str = "", research_context: str = "") -> 
                 add_log(f"Gemini 토큰 사용: 입력 {pt} + 출력 {ct} = {tt}개")
 
             result = _parse_response(text, keyword)
+            if fixed_title:
+                result["title"] = fixed_title
             _validate_content(result, keyword)
 
             add_log(f"AI 글쓰기 완료: {result['title']}")

@@ -33,30 +33,35 @@ def _is_title_duplicate(new_title: str, threshold: float = 0.7) -> tuple:
 
 def run_single_post(
     keyword: str = None,
+    fixed_title: str = None,
     scheduled_at: str = None,
     settings: dict = None,
 ) -> dict:
     """
     단일 글 작성 및 업로드 파이프라인
+    fixed_title: AI 제목 대기열에서 선택한 확정 제목 (있으면 제목 고정, 본문만 생성)
     settings: {image_count, min_content_length, writing_style}
     """
     settings = settings or {}
     try:
-        # 1. 키워드 선택
+        # 1. 키워드 선택 (fixed_title이 있으면 제목 자체를 키워드로 활용)
         if not keyword:
-            keywords = get_fresh_keywords(count=1)
-            if not keywords:
-                return {"success": False, "error": "사용 가능한 키워드 없음"}
-            keyword = keywords[0]
+            if fixed_title:
+                keyword = fixed_title
+            else:
+                keywords = get_fresh_keywords(count=1)
+                if not keywords:
+                    return {"success": False, "error": "사용 가능한 키워드 없음"}
+                keyword = keywords[0]
 
-        add_log(f"=== 글쓰기 파이프라인 시작: {keyword} ===")
+        add_log(f"=== 글쓰기 파이프라인 시작: {keyword} ===" + (f" [확정 제목: {fixed_title}]" if fixed_title else ""))
 
         # 2. 콘텐츠 리서치 (네이버 검색 API)
         research_context = get_research_context(keyword)
 
         # 3. AI 글쓰기 (리서치 컨텍스트 + Gemini Grounding)
         style = settings.get("writing_style", "")
-        post_data = generate_post(keyword, style=style, research_context=research_context)
+        post_data = generate_post(keyword, style=style, research_context=research_context, fixed_title=fixed_title or "")
 
         # 제목 유사도 중복 체크
         is_dup, similar_title = _is_title_duplicate(post_data["title"])
@@ -109,43 +114,56 @@ def run_single_post(
 
 def run_batch(
     keywords: list = None,
+    titles: list = None,
     count: int = 1,
     interval_minutes: int = 60,
     scheduled: bool = False,
     settings: dict = None,
 ):
     """
-    여러 키워드 배치 작성
-    keywords: 지정 키워드 목록 (없으면 자동)
+    여러 키워드/확정 제목 배치 작성
+    keywords: 키워드 목록 (없으면 자동) - AI가 제목+본문 생성
+    titles: AI 확정 제목 목록 - 제목 고정, 본문만 생성
     scheduled: True면 interval_minutes 간격으로 예약 발행
     """
     settings = settings or {}
 
-    # 키워드 준비
-    if not keywords:
-        keywords = get_fresh_keywords(count=count)
-    if not keywords:
-        keywords = [None] * count  # 자동 선택
+    # 작업 목록 구성: {keyword, fixed_title}
+    jobs = []
+    for t in (titles or []):
+        jobs.append({"keyword": None, "fixed_title": t})
+    if keywords:
+        for kw in keywords:
+            jobs.append({"keyword": kw, "fixed_title": None})
+    if not jobs:
+        kws = get_fresh_keywords(count=count)
+        if not kws:
+            kws = [None] * count
+        for kw in kws:
+            jobs.append({"keyword": kw, "fixed_title": None})
 
-    add_log(f"배치 시작: {len(keywords)}개, {'예약 ' + str(interval_minutes) + '분 간격' if scheduled else '즉시 발행'}")
+    add_log(f"배치 시작: 총 {len(jobs)}개 (확정제목 {len(titles or [])}개 + 키워드 {len(keywords or [])}개), "
+            f"{'예약 ' + str(interval_minutes) + '분 간격' if scheduled else '즉시 발행'}")
     results = []
 
-    for i, kw in enumerate(keywords):
-        # 예약 시간 계산 (예약 모드)
+    for i, job in enumerate(jobs):
         sched_at = None
         if scheduled:
-            from datetime import timezone
             base = datetime.now() + timedelta(minutes=interval_minutes * (i + 1))
             sched_at = base.strftime("%Y-%m-%dT%H:%M:%S+09:00")
 
-        result = run_single_post(keyword=kw, scheduled_at=sched_at, settings=settings)
+        result = run_single_post(
+            keyword=job["keyword"],
+            fixed_title=job["fixed_title"],
+            scheduled_at=sched_at,
+            settings=settings,
+        )
         results.append(result)
 
-        # 즉시 모드: 글 사이 30초 대기 (API 부하 방지)
-        if not scheduled and i < len(keywords) - 1:
+        if not scheduled and i < len(jobs) - 1:
             add_log("다음 글 준비 중... 30초 대기")
             time.sleep(30)
 
     success = sum(1 for r in results if r["success"])
-    add_log(f"배치 완료: 성공 {success}/{len(keywords)}")
+    add_log(f"배치 완료: 성공 {success}/{len(jobs)}")
     return results

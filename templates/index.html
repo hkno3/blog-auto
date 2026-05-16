@@ -138,6 +138,15 @@
     <button class="btn-clear" onclick="clearSelection()">선택 초기화</button>
   </div>
 
+  <!-- AI 제목 대기열 -->
+  <div id="title-queue-wrap" style="display:none;margin-top:10px;border:1px solid #e9d5ff;border-radius:8px;overflow:hidden;">
+    <div style="background:#f5f3ff;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e9d5ff;">
+      <span style="font-size:0.85em;font-weight:600;color:#7c3aed;">AI 확정 제목 대기열</span>
+      <button onclick="clearTitleQueue()" style="background:none;border:none;cursor:pointer;font-size:0.78em;color:#94a3b8;">전체 삭제</button>
+    </div>
+    <div id="title-queue-list" style="padding:8px 10px;display:flex;flex-direction:column;gap:5px;"></div>
+  </div>
+
   <!-- 실행 버튼 -->
   <div class="run-btns">
     <button class="btn-primary btn-large" onclick="runNow()">
@@ -584,27 +593,58 @@ async function generateTitles() {
   }
 }
 
+// AI 제목 대기열
+let titleQueue = [];
+
 function copyAndUseTitle(title) {
-  const manualInput = document.getElementById('manual-keyword');
-  if (manualInput) {
-    manualInput.value = title;
-    manualInput.scrollIntoView({behavior: 'smooth', block: 'center'});
-    showToast('제목이 키워드 입력란에 복사되었습니다.');
-  } else {
-    navigator.clipboard.writeText(title).then(() => showToast('클립보드에 복사되었습니다.'));
+  if (titleQueue.includes(title)) {
+    showToast('이미 대기열에 있는 제목입니다.');
+    return;
   }
+  titleQueue.push(title);
+  renderTitleQueue();
+  showToast('AI 제목 대기열에 추가되었습니다.');
+}
+
+function renderTitleQueue() {
+  const wrap = document.getElementById('title-queue-wrap');
+  const list = document.getElementById('title-queue-list');
+  if (titleQueue.length === 0) {
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = 'block';
+  list.innerHTML = titleQueue.map((t, i) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:5px 4px;border-bottom:1px solid #f3e8ff;">
+      <span style="min-width:20px;font-size:0.75em;font-weight:700;color:#7c3aed;">${i+1}</span>
+      <span style="flex:1;font-size:0.87em;color:#1e293b;">${t}</span>
+      <button onclick="removeTitleFromQueue(${i})"
+              style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:1em;padding:0 4px;">×</button>
+    </div>`).join('');
+}
+
+function removeTitleFromQueue(idx) {
+  titleQueue.splice(idx, 1);
+  renderTitleQueue();
+}
+
+function clearTitleQueue() {
+  titleQueue = [];
+  renderTitleQueue();
 }
 
 // ─── 즉시 실행 ────────────────────────────────────────
 async function runNow() {
   const keywords = getKeywordsToRun();
+  const titles = [...titleQueue];
   const settings = getWritingSettings();
+  const count = keywords.length + titles.length || 1;
 
   showProgress();
   const res = await fetch('/run/now', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ keywords, count: keywords.length || 1, ...settings })
+    body: JSON.stringify({ keywords, titles, count, ...settings })
   });
   const data = await res.json();
   showToast(data.message, data.success ? 'success' : 'error');
@@ -614,14 +654,16 @@ async function runNow() {
 // ─── 예약 실행 ────────────────────────────────────────
 async function runEveryInterval() {
   const keywords = getKeywordsToRun();
+  const titles = [...titleQueue];
   const settings = getWritingSettings();
-  const count = keywords.length || 1;
+  const count = keywords.length + titles.length || 1;
 
   const res = await fetch('/run/scheduled', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
       keywords,
+      titles,
       count,
       interval_minutes: settings.interval_minutes,
       ...settings
