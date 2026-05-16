@@ -47,6 +47,17 @@ _KOREAN_SURNAMES = set(
     "김이박최정강조윤장임한오서신권황안송류전홍고문양손배백허유남심노하곽성차주우구나민진지엄채원천방공현함변염추도석선설마길연표명기반왕탁국어은편용"
 )
 
+# 인명이 아닌 단어 블랙리스트 (직업명, 일반명사 등)
+_NON_PERSON_WORDS = {
+    "고등학생", "중학생", "초등학생", "대학생", "직장인", "주부", "어르신",
+    "시민들", "국민들", "전문가", "관계자", "담당자", "소비자", "투자자",
+    "근로자", "아르바이트", "자영업자", "프리랜서", "취준생", "수험생",
+    "서울시", "경기도", "부산시", "인천시", "대구시", "광주시", "대전시",
+    "한국인", "외국인", "미국인", "일본인", "중국인",
+    "남성분", "여성분", "남자분", "여자분", "어린이", "청소년",
+    "오마이걸", "뉴진스", "에스파", "아이브", "르세라핌",  # 그룹명
+}
+
 # 뉴스 검색 쿼리 → 섹션 분류
 _SEARCH_QUERIES = [
     ("배우 근황", "연예인"),
@@ -95,14 +106,7 @@ def _is_valid_korean_name(name: str) -> bool:
         return False
     if name[0] not in _KOREAN_SURNAMES:
         return False
-    # 흔한 비인명 단어 제외
-    _NON_NAMES = {
-        "대통령", "국회의", "위원회", "정부가", "경찰이", "검찰이",
-        "서울시", "경기도", "인천시", "부산시", "대구시", "광주시",
-        "한국인", "외국인", "전문가", "관계자", "담당자", "소비자",
-        "투자자", "근로자", "시민들", "국민들", "학생들", "어린이",
-    }
-    if name in _NON_NAMES:
+    if name in _NON_PERSON_WORDS:
         return False
     return True
 
@@ -238,10 +242,16 @@ def get_celebrity_keywords(count: int = 20) -> list[str]:
     keywords = []
     seen_keywords = set()
 
+    # 카테고리 인덱스를 순환시켜서 다양한 조합 생성
+    category_idx: dict[str, int] = {}
+
     for name, category in celebs:
         categories = _CELEB_CATEGORIES.get(category, _CELEB_CATEGORIES["기타"])
-        # 카테고리 첫 번째만 조합 (다양한 인물 우선)
-        kw = f"{name} {categories[0]}"
+        idx = category_idx.get(category, 0)
+        cat = categories[idx % len(categories)]
+        category_idx[category] = idx + 1
+
+        kw = f"{name} {cat}"
         if kw not in seen_keywords:
             seen_keywords.add(kw)
             keywords.append(kw)
