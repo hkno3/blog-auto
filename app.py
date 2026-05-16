@@ -177,6 +177,36 @@ def api_research_categories():
     return jsonify({"categories": list(CATEGORY_QUERIES.keys())})
 
 
+@app.route("/api/ai/generate-titles", methods=["POST"])
+def api_generate_titles():
+    """체크된 뉴스 기사들의 본문을 크롤링 후 SEO 제목 3개씩 생성 (1회 Gemini 호출)"""
+    data = request.json or {}
+    articles_input = data.get("articles", [])
+
+    if not articles_input:
+        return jsonify({"error": "기사 목록이 없습니다."}), 400
+    if len(articles_input) > 5:
+        return jsonify({"error": "최대 5개까지 선택 가능합니다."}), 400
+
+    try:
+        from modules.content_researcher import scrape_article
+        from modules.ai_writer import generate_seo_titles
+
+        articles = []
+        for item in articles_input:
+            title = item.get("title", "")
+            link = item.get("link", "")
+            content = scrape_article(link) if link else ""
+            articles.append({"title": title, "content": content})
+
+        results = generate_seo_titles(articles)
+        return jsonify({"success": True, "results": results})
+
+    except Exception as e:
+        add_log(f"SEO 제목 생성 오류: {e}", "ERROR")
+        return jsonify({"error": str(e)}), 500
+
+
 # ─── 유명인 키워드 ────────────────────────────────────
 
 @app.route("/api/keywords/celebrity")
