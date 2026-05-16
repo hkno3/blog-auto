@@ -164,6 +164,23 @@ def get_gemini_usage(days: int = 7) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def get_scheduled_info() -> dict:
+    """미래 예약된 글 현황: count + 마지막 scheduled_at"""
+    conn = get_conn()
+    row = conn.execute("""
+        SELECT COUNT(*) as cnt, MAX(scheduled_at) as last_at
+        FROM posts
+        WHERE status IN ('pending', 'published')
+          AND scheduled_at IS NOT NULL
+          AND scheduled_at > datetime('now', 'localtime')
+    """).fetchone()
+    conn.close()
+    return {
+        "count": row["cnt"] or 0,
+        "last_at": row["last_at"] or None,
+    }
+
+
 def get_logs(limit: int = 100):
     conn = get_conn()
     rows = conn.execute(
