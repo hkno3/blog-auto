@@ -308,6 +308,29 @@ def test_api():
         except Exception as e:
             results["pixabay"] = {"ok": False, "msg": str(e)}
 
+    if api_name in ("naver", "all"):
+        try:
+            import requests as req
+            client_id = get_api_key("naver_client_id")
+            client_secret = get_api_key("naver_client_secret")
+            if client_id and client_secret:
+                r = req.get(
+                    "https://openapi.naver.com/v1/search/news.json",
+                    headers={
+                        "X-Naver-Client-Id": client_id,
+                        "X-Naver-Client-Secret": client_secret,
+                    },
+                    params={"query": "테스트", "display": 1},
+                    timeout=5,
+                )
+                r.raise_for_status()
+                total = r.json().get("total", 0)
+                results["naver"] = {"ok": True, "msg": f"연결 성공 (검색결과 {total:,}건)"}
+            else:
+                results["naver"] = {"ok": False, "msg": "Client ID 또는 Secret 없음"}
+        except Exception as e:
+            results["naver"] = {"ok": False, "msg": str(e)}
+
     if api_name in ("google_sheets", "all"):
         try:
             import requests as req
