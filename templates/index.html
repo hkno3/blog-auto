@@ -83,18 +83,32 @@
       <input type="text" id="manual-keyword" placeholder="입력 없이 추천 키워드 선택 가능">
       <button class="btn-secondary" onclick="loadKeywords()">키워드 추천</button>
       <button class="btn-secondary" style="background:#7c3aed;color:#fff;border-color:#7c3aed;" onclick="loadCelebrityKeywords()">⭐ 유명인 키워드</button>
-      <button class="btn-secondary" style="background:#0ea5e9;color:#fff;border-color:#0ea5e9;" onclick="searchNewsTitles()">🔍 뉴스 검색</button>
     </div>
   </div>
 
-  <!-- 뉴스 기사 제목 목록 -->
-  <div id="news-titles-box" style="display:none; margin-bottom:16px;">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-      <strong style="font-size:0.95em; color:#334155;">📰 검색된 뉴스 기사 제목</strong>
-      <button onclick="document.getElementById('news-titles-box').style.display='none'"
-              style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:1.1em;">✕</button>
+  <!-- 유명인 카테고리 뉴스 탐색 -->
+  <div class="form-group">
+    <label>📰 유명인 카테고리 뉴스 탐색 <span style="font-size:0.8em;color:#94a3b8;">클릭하면 관련 기사 + 검색량이 표시됩니다</span></label>
+    <div id="category-btns" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+      <button class="btn-cat" onclick="searchCategoryNews('건강')">💊 건강</button>
+      <button class="btn-cat" onclick="searchCategoryNews('다이어트')">🥗 다이어트</button>
+      <button class="btn-cat" onclick="searchCategoryNews('부동산')">🏠 부동산</button>
+      <button class="btn-cat" onclick="searchCategoryNews('사업')">💼 사업</button>
+      <button class="btn-cat" onclick="searchCategoryNews('투자')">📈 투자</button>
+      <button class="btn-cat" onclick="searchCategoryNews('패션')">👗 패션</button>
+      <button class="btn-cat" onclick="searchCategoryNews('피부')">✨ 피부</button>
+      <button class="btn-cat" onclick="searchCategoryNews('운동')">🏋️ 운동</button>
     </div>
-    <div id="news-titles-list" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;"></div>
+
+    <!-- 결과 패널 -->
+    <div id="cat-news-box" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <strong id="cat-news-title" style="font-size:0.95em;color:#334155;"></strong>
+        <button onclick="document.getElementById('cat-news-box').style.display='none'"
+                style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:1.2em;">✕</button>
+      </div>
+      <div id="cat-news-list" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;max-height:500px;overflow-y:auto;"></div>
+    </div>
   </div>
 
   <!-- 번호 키워드 칩 -->
@@ -340,38 +354,82 @@ function getWritingSettings() {
   };
 }
 
-// ─── 뉴스 기사 제목 검색 ─────────────────────────────
-async function searchNewsTitles() {
-  const keyword = document.getElementById('manual-keyword').value.trim();
-  if (!keyword) {
-    showToast('키워드를 먼저 입력해주세요.', 'error');
-    return;
-  }
+// ─── 카테고리별 유명인 뉴스 탐색 ────────────────────
+let activeCatBtn = null;
 
-  const box = document.getElementById('news-titles-box');
-  const list = document.getElementById('news-titles-list');
+async function searchCategoryNews(category) {
+  // 버튼 활성화 표시
+  document.querySelectorAll('.btn-cat').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  activeCatBtn = event.target;
+
+  const box = document.getElementById('cat-news-box');
+  const list = document.getElementById('cat-news-list');
+  const title = document.getElementById('cat-news-title');
+
   box.style.display = 'block';
-  list.innerHTML = '<div style="padding:12px;color:#64748b;font-size:0.9em;">검색 중...</div>';
+  title.textContent = `📰 유명인 + ${category} 뉴스/블로그`;
+  list.innerHTML = '<div style="padding:14px;color:#64748b;font-size:0.9em;">검색 중... (잠시만 기다려주세요)</div>';
 
-  const res = await fetch(`/api/research/titles?keyword=${encodeURIComponent(keyword)}`);
-  const data = await res.json();
+  try {
+    const res = await fetch(`/api/research/category-news?category=${encodeURIComponent(category)}`);
+    const data = await res.json();
 
-  if (!data.titles || data.titles.length === 0) {
-    list.innerHTML = '<div style="padding:12px;color:#94a3b8;font-size:0.9em;">검색 결과가 없습니다.</div>';
-    return;
+    if (!data.articles || data.articles.length === 0) {
+      list.innerHTML = '<div style="padding:14px;color:#94a3b8;">검색 결과가 없습니다.</div>';
+      return;
+    }
+
+    // 검색량 맵
+    const volumes = data.volumes || {};
+
+    // 헤더
+    let html = `
+      <div style="display:grid;grid-template-columns:50px 1fr 90px 100px;gap:0;background:#f8fafc;border-bottom:1px solid #e2e8f0;font-size:0.8em;font-weight:600;color:#64748b;">
+        <div style="padding:8px 10px;">유형</div>
+        <div style="padding:8px 10px;">제목</div>
+        <div style="padding:8px 10px;text-align:center;">발행일</div>
+        <div style="padding:8px 10px;text-align:right;">월간검색량</div>
+      </div>`;
+
+    html += data.articles.map((item, i) => {
+      const isNews = item.type === '뉴스';
+      const bgColor = i % 2 === 0 ? '#fff' : '#fafafa';
+      const typeBg = isNews ? '#dbeafe' : '#f0fdf4';
+      const typeColor = isNews ? '#1d4ed8' : '#15803d';
+      const vol = volumes[item.query];
+      const volStr = vol !== undefined
+        ? (vol === 0 ? '<1' : vol.toLocaleString())
+        : '-';
+      const volColor = vol > 10000 ? '#dc2626' : vol > 3000 ? '#d97706' : '#64748b';
+
+      return `
+        <div style="display:grid;grid-template-columns:50px 1fr 90px 100px;gap:0;background:${bgColor};border-bottom:1px solid #f1f5f9;align-items:center;">
+          <div style="padding:9px 10px;">
+            <span style="font-size:0.72em;padding:2px 6px;border-radius:8px;background:${typeBg};color:${typeColor};">${item.type}</span>
+          </div>
+          <div style="padding:9px 10px;">
+            <a href="${item.link}" target="_blank"
+               style="font-size:0.88em;color:#1e293b;text-decoration:none;line-height:1.5;"
+               onmouseover="this.style.color='#4f46e5'" onmouseout="this.style.color='#1e293b'">
+              ${item.title}
+            </a>
+          </div>
+          <div style="padding:9px 10px;text-align:center;font-size:0.82em;color:#94a3b8;">
+            ${item.pubDate || '-'}
+          </div>
+          <div style="padding:9px 10px;text-align:right;font-size:0.85em;font-weight:600;color:${volColor};">
+            ${volStr}
+          </div>
+        </div>`;
+    }).join('');
+
+    list.innerHTML = html;
+    title.textContent = `📰 유명인 + ${category} — 총 ${data.total}건`;
+
+  } catch(e) {
+    list.innerHTML = `<div style="padding:14px;color:#ef4444;">오류 발생: ${e.message}</div>`;
   }
-
-  list.innerHTML = data.titles.map((item, i) => `
-    <div style="padding:10px 14px;border-bottom:1px solid #f1f5f9;display:flex;align-items:flex-start;gap:10px;${i === data.titles.length-1 ? 'border-bottom:none;' : ''}">
-      <span style="font-size:0.75em;padding:2px 7px;border-radius:10px;white-space:nowrap;margin-top:2px;
-        background:${item.type === '뉴스' ? '#dbeafe' : '#f0fdf4'};
-        color:${item.type === '뉴스' ? '#1d4ed8' : '#15803d'};">${item.type}</span>
-      ${item.link
-        ? `<a href="${item.link}" target="_blank" style="font-size:0.9em;color:#1e293b;text-decoration:none;line-height:1.5;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${item.title}</a>`
-        : `<span style="font-size:0.9em;color:#1e293b;line-height:1.5;">${item.title}</span>`
-      }
-    </div>
-  `).join('');
 }
 
 // ─── 유명인 키워드 추천 ──────────────────────────────

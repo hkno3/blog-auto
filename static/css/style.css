@@ -389,6 +389,15 @@ small { color: var(--text-muted); font-size: 12px; display: block; margin-top: 4
 }
 .btn-clear-all:hover { background: #fee2e2; }
 
+/* ─── 카테고리 뉴스 버튼 ─────────────────────────────── */
+.btn-cat {
+  background: #f8fafc; border: 1px solid #e2e8f0; color: #475569;
+  padding: 6px 14px; border-radius: 20px; font-size: 0.88em; cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-cat:hover { background: #e0e7ff; border-color: #a5b4fc; color: #4f46e5; }
+.btn-cat.active { background: #4f46e5; border-color: #4f46e5; color: #fff; }
+
 /* ─── 실행 버튼 ──────────────────────────────────────── */
 .run-btns { display: flex; gap: 12px; margin: 12px 0; }
 .run-btns .btn-large { flex: 1; margin-top: 0; }
