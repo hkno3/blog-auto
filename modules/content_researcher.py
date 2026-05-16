@@ -46,17 +46,30 @@ def _strip_html(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+_MONTHS = {
+    "Jan":"01","Feb":"02","Mar":"03","Apr":"04","May":"05","Jun":"06",
+    "Jul":"07","Aug":"08","Sep":"09","Oct":"10","Nov":"11","Dec":"12",
+}
+
 def _parse_date(date_str: str) -> str:
     """다양한 날짜 형식 → YYYY.MM.DD"""
     if not date_str:
         return ""
+    # 블로그: "20260516"
     if re.match(r"^\d{8}$", date_str):
         return f"{date_str[:4]}.{date_str[4:6]}.{date_str[6:]}"
+    # RFC 2822: "Wed, 29 Apr 2026 10:30:00 +0900"
     try:
         dt = email.utils.parsedate_to_datetime(date_str)
         return dt.strftime("%Y.%m.%d")
     except Exception:
-        return date_str[:10]
+        pass
+    # 정규식 fallback: "29 Apr 2026" 패턴
+    m = re.search(r"(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})", date_str)
+    if m:
+        day, mon, year = m.group(1), m.group(2)[:3].capitalize(), m.group(3)
+        return f"{year}.{_MONTHS.get(mon, '00')}.{day.zfill(2)}"
+    return ""
 
 
 def search_naver_news(keyword: str, display: int = MAX_ARTICLES) -> list[dict]:
