@@ -82,6 +82,7 @@
     <div class="input-with-btn">
       <input type="text" id="manual-keyword" placeholder="입력 없이 추천 키워드 선택 가능">
       <button class="btn-secondary" onclick="loadKeywords()">키워드 추천</button>
+      <button class="btn-secondary" style="background:#7c3aed;color:#fff;border-color:#7c3aed;" onclick="loadCelebrityKeywords()">⭐ 유명인 키워드</button>
     </div>
   </div>
 
@@ -326,6 +327,54 @@ function getWritingSettings() {
     min_content_length: parseInt(document.getElementById('min_content_length').value) || 800,
     writing_style: document.getElementById('writing_style').value,
   };
+}
+
+// ─── 유명인 키워드 추천 ──────────────────────────────
+async function loadCelebrityKeywords() {
+  const container = document.getElementById('keyword-list');
+  const header = document.getElementById('keyword-list-header');
+
+  const loadingEl = document.createElement('span');
+  loadingEl.id = 'kw-loading';
+  loadingEl.style.cssText = 'color:#7c3aed;font-size:13px;align-self:center;';
+  loadingEl.textContent = '⭐ 유명인 트렌드 수집 중... (10~20초 소요)';
+  container.appendChild(loadingEl);
+  container.style.display = 'flex';
+  header.style.display = 'flex';
+  showToast('유명인 키워드 수집 중... 잠시만 기다려주세요.');
+
+  try {
+    const res = await fetch('/api/keywords/celebrity?count=20');
+    const data = await res.json();
+
+    const loading = document.getElementById('kw-loading');
+    if (loading) loading.remove();
+
+    if (!data.keywords || data.keywords.length === 0) {
+      showToast('유명인 키워드를 가져오지 못했습니다.', 'error');
+      return;
+    }
+
+    const existingKws = new Set(
+      [...container.querySelectorAll('.chip')].map(c => c.dataset.kw)
+    );
+
+    const newHtml = data.keywords
+      .filter(kw => !existingKws.has(kw))
+      .map(kw =>
+        `<span class="chip" data-kw="${kw.replace(/"/g,'&quot;')}" style="border-color:#7c3aed;" onclick="toggleKeyword(this, '${kw.replace(/'/g,"\\'")}')">
+          <span class="chip-num"></span>⭐ ${kw}<button class="chip-del" onclick="event.stopPropagation();deleteKeyword(this,'${kw.replace(/'/g,"\\'")}')">×</button>
+        </span>`
+      ).join('');
+
+    container.insertAdjacentHTML('beforeend', newHtml);
+    renumberChips();
+    showToast(`유명인 키워드 ${data.keywords.length}개 추가됨`, 'success');
+  } catch (e) {
+    const loading = document.getElementById('kw-loading');
+    if (loading) loading.remove();
+    showToast('유명인 키워드 수집 실패', 'error');
+  }
 }
 
 // ─── 즉시 실행 ────────────────────────────────────────
