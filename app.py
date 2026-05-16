@@ -160,7 +160,7 @@ def api_research_category_news():
 
     try:
         from modules.content_researcher import search_celebrity_category
-        articles = search_celebrity_category(category, max_total=150)
+        articles = search_celebrity_category(category, max_total=100)
         return jsonify({
             "category": category,
             "total": len(articles),

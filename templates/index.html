@@ -88,31 +88,33 @@
 
   <!-- 유명인 카테고리 뉴스 탐색 -->
   <div class="form-group">
-    <label>📰 유명인 카테고리 뉴스 탐색 <span style="font-size:0.8em;color:#94a3b8;">클릭하면 관련 기사 + 검색량이 표시됩니다</span></label>
-    <div id="category-btns" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
-      <button class="btn-cat" onclick="searchCategoryNews('건강')">💊 건강</button>
-      <button class="btn-cat" onclick="searchCategoryNews('부동산')">🏠 부동산</button>
-      <button class="btn-cat" onclick="searchCategoryNews('사업')">💼 사업</button>
-      <button class="btn-cat" onclick="searchCategoryNews('투자')">📈 투자</button>
+    <label>📰 유명인 카테고리 뉴스 탐색 <span style="font-size:0.8em;color:#94a3b8;">탭 클릭 시 로드 · 최대 5개 체크 후 AI 제목 생성</span></label>
+
+    <!-- 탭 바 + AI 제목 생성 버튼 -->
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:0;">
+      <div style="display:flex;gap:0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+        <button class="btn-tab" data-cat="건강"    onclick="switchTab('건강')"   >💊 건강</button>
+        <button class="btn-tab" data-cat="부동산"  onclick="switchTab('부동산')" >🏠 부동산</button>
+        <button class="btn-tab" data-cat="사업"    onclick="switchTab('사업')"   >💼 사업</button>
+        <button class="btn-tab" data-cat="투자"    onclick="switchTab('투자')"   >📈 투자</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span id="check-counter" style="font-size:0.82em;color:#7c3aed;font-weight:600;display:none;">
+          선택: <span id="check-count">0</span>/5
+        </span>
+        <button id="btn-gen-titles" onclick="generateTitles()"
+                style="display:none;background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:0.85em;cursor:pointer;font-weight:600;">
+          AI 제목 생성
+        </button>
+      </div>
     </div>
 
-    <!-- 결과 패널 -->
-    <div id="cat-news-box" style="display:none;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
-        <strong id="cat-news-title" style="font-size:0.95em;color:#334155;"></strong>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <span id="check-counter" style="font-size:0.82em;color:#7c3aed;font-weight:600;display:none;">
-            선택: <span id="check-count">0</span>/5
-          </span>
-          <button id="btn-gen-titles" onclick="generateTitles()"
-                  style="display:none;background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:0.85em;cursor:pointer;font-weight:600;">
-            AI 제목 생성
-          </button>
-          <button onclick="document.getElementById('cat-news-box').style.display='none'"
-                  style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:1.2em;">✕</button>
-        </div>
-      </div>
-      <div id="cat-news-list" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;max-height:500px;overflow-y:auto;"></div>
+    <!-- 탭 콘텐츠 패널 (4개, display:none 으로 시작) -->
+    <div id="tab-panels" style="margin-top:0;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;display:none;">
+      <div id="tab-panel-건강"   class="tab-panel"></div>
+      <div id="tab-panel-부동산" class="tab-panel"></div>
+      <div id="tab-panel-사업"   class="tab-panel"></div>
+      <div id="tab-panel-투자"   class="tab-panel"></div>
     </div>
 
     <!-- AI 제목 결과 패널 -->
@@ -389,36 +391,146 @@ function formatDate(dateStr) {
   return dateStr;
 }
 
-// ─── 카테고리별 유명인 뉴스 탐색 ────────────────────
-let activeCatBtn = null;
-let checkedArticles = [];  // {title, link}
+// ─── 카테고리 탭 방식 뉴스 탐색 ─────────────────────
+// tabCache: 탭별 로딩 상태 + 기사 데이터 + 체크 상태 보관
+const tabCache = {
+  '건강':   { loaded: false, articles: [], checkedKeys: new Set() },
+  '부동산': { loaded: false, articles: [], checkedKeys: new Set() },
+  '사업':   { loaded: false, articles: [], checkedKeys: new Set() },
+  '투자':   { loaded: false, articles: [], checkedKeys: new Set() },
+};
+let activeTabCat = null;
+
+function getAllChecked() {
+  // 모든 탭에서 체크된 항목 합산
+  const all = [];
+  for (const cat of Object.keys(tabCache)) {
+    const cache = tabCache[cat];
+    for (const key of cache.checkedKeys) {
+      const idx = parseInt(key);
+      if (cache.articles[idx]) {
+        all.push({title: cache.articles[idx].title, link: cache.articles[idx].link});
+      }
+    }
+  }
+  return all;
+}
 
 function updateCheckCounter() {
-  const count = checkedArticles.length;
+  const total = getAllChecked().length;
   const counter = document.getElementById('check-counter');
   const countEl = document.getElementById('check-count');
   const btnGen = document.getElementById('btn-gen-titles');
-  countEl.textContent = count;
-  counter.style.display = count > 0 ? 'inline' : 'none';
-  btnGen.style.display = count > 0 ? 'inline-block' : 'none';
+  countEl.textContent = total;
+  counter.style.display = total > 0 ? 'inline' : 'none';
+  btnGen.style.display = total > 0 ? 'inline-block' : 'none';
 }
 
-function toggleArticleCheck(idx, title, link, checkbox) {
+function toggleArticleCheck(cat, idx, checkbox) {
+  const cache = tabCache[cat];
+  const total = getAllChecked().length;
   if (checkbox.checked) {
-    if (checkedArticles.length >= 5) {
+    if (total >= 5) {
       checkbox.checked = false;
       showToast('최대 5개까지만 선택할 수 있습니다.');
       return;
     }
-    checkedArticles.push({idx, title, link});
+    cache.checkedKeys.add(String(idx));
   } else {
-    checkedArticles = checkedArticles.filter(a => a.idx !== idx);
+    cache.checkedKeys.delete(String(idx));
   }
   updateCheckCounter();
 }
 
+function buildArticleListHtml(cat, articles) {
+  const cache = tabCache[cat];
+  let html = `
+    <div style="display:grid;grid-template-columns:40px 56px 1fr 115px;background:#f8fafc;border-bottom:2px solid #e2e8f0;font-size:0.8em;font-weight:600;color:#64748b;position:sticky;top:0;z-index:1;">
+      <div style="padding:8px 10px;text-align:center;"></div>
+      <div style="padding:8px 10px;">유형</div>
+      <div style="padding:8px 10px;">제목</div>
+      <div style="padding:8px 10px;text-align:center;">발행일</div>
+    </div>`;
+
+  html += articles.map((item, i) => {
+    const isNews = item.type === '뉴스';
+    const bgColor = i % 2 === 0 ? '#fff' : '#fafafa';
+    const typeBg = isNews ? '#dbeafe' : '#f0fdf4';
+    const typeColor = isNews ? '#1d4ed8' : '#15803d';
+    const isChecked = cache.checkedKeys.has(String(i));
+    const safeTitle = item.title.replace(/"/g, '&quot;');
+
+    return `
+      <div style="display:grid;grid-template-columns:40px 56px 1fr 115px;background:${bgColor};border-bottom:1px solid #f1f5f9;align-items:center;">
+        <div style="padding:9px 10px;text-align:center;">
+          <input type="checkbox" data-cat="${cat}" data-idx="${i}"
+                 ${isChecked ? 'checked' : ''}
+                 onchange="toggleArticleCheck('${cat}', ${i}, this)"
+                 style="cursor:pointer;width:15px;height:15px;accent-color:#7c3aed;">
+        </div>
+        <div style="padding:9px 10px;">
+          <span style="display:inline-block;font-size:0.72em;padding:3px 7px;border-radius:8px;white-space:nowrap;background:${typeBg};color:${typeColor};font-weight:600;">${item.type}</span>
+        </div>
+        <div style="padding:9px 10px;">
+          <a href="${item.link}" target="_blank"
+             style="font-size:0.88em;color:#1e293b;text-decoration:none;line-height:1.5;"
+             onmouseover="this.style.color='#4f46e5'" onmouseout="this.style.color='#1e293b'">
+            ${item.title}
+          </a>
+        </div>
+        <div style="padding:9px 10px;text-align:center;font-size:0.82em;color:#94a3b8;white-space:nowrap;">
+          ${formatDate(item.pubDate)}
+        </div>
+      </div>`;
+  }).join('');
+
+  return html;
+}
+
+async function switchTab(cat) {
+  // 탭 버튼 활성화
+  document.querySelectorAll('.btn-tab').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.btn-tab[data-cat="${cat}"]`).classList.add('active');
+  activeTabCat = cat;
+
+  // 패널 표시
+  document.getElementById('tab-panels').style.display = 'block';
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  const panel = document.getElementById(`tab-panel-${cat}`);
+  panel.classList.add('active');
+
+  // 이미 로드된 탭은 즉시 표시
+  if (tabCache[cat].loaded) return;
+
+  // 첫 로드
+  panel.innerHTML = '<div style="padding:14px;color:#64748b;font-size:0.9em;">검색 중... (잠시만 기다려주세요)</div>';
+
+  try {
+    const res = await fetch(`/api/research/category-news?category=${encodeURIComponent(cat)}`);
+    const data = await res.json();
+
+    if (!data.articles || data.articles.length === 0) {
+      panel.innerHTML = '<div style="padding:14px;color:#94a3b8;">검색 결과가 없습니다.</div>';
+      tabCache[cat].loaded = true;
+      return;
+    }
+
+    tabCache[cat].articles = data.articles;
+    tabCache[cat].loaded = true;
+
+    const header = `<div style="padding:8px 12px;background:#f0f4ff;font-size:0.82em;color:#4f46e5;font-weight:600;border-bottom:1px solid #e2e8f0;">
+      총 ${data.total}건
+    </div>`;
+    panel.innerHTML = header + buildArticleListHtml(cat, data.articles);
+
+  } catch(e) {
+    panel.innerHTML = `<div style="padding:14px;color:#ef4444;">오류 발생: ${e.message}</div>`;
+  }
+}
+
 async function generateTitles() {
-  if (checkedArticles.length === 0) {
+  const checked = getAllChecked();
+  if (checked.length === 0) {
     showToast('기사를 선택해주세요.');
     return;
   }
@@ -436,7 +548,7 @@ async function generateTitles() {
     const res = await fetch('/api/ai/generate-titles', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({articles: checkedArticles.map(a => ({title: a.title, link: a.link}))})
+      body: JSON.stringify({articles: checked})
     });
     const data = await res.json();
 
@@ -446,7 +558,7 @@ async function generateTitles() {
     }
 
     let html = '';
-    data.results.forEach((result, i) => {
+    data.results.forEach((result) => {
       html += `
         <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #e9d5ff;">
           <div style="font-size:0.78em;color:#94a3b8;margin-bottom:6px;">원본: ${result.original_title}</div>
@@ -454,7 +566,7 @@ async function generateTitles() {
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
               <span style="min-width:20px;font-size:0.75em;font-weight:700;color:#7c3aed;">${ti+1}</span>
               <span style="flex:1;font-size:0.9em;color:#1e293b;font-weight:500;">${t}</span>
-              <button onclick="copyAndUseTitle('${t.replace(/'/g, "\\'")}')"
+              <button onclick="copyAndUseTitle('${t.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')"
                       style="background:#7c3aed;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:0.75em;cursor:pointer;white-space:nowrap;">
                 이 제목 사용
               </button>
@@ -478,86 +590,9 @@ function copyAndUseTitle(title) {
   if (manualInput) {
     manualInput.value = title;
     manualInput.scrollIntoView({behavior: 'smooth', block: 'center'});
-    showToast(`제목이 키워드 입력란에 복사되었습니다.`);
+    showToast('제목이 키워드 입력란에 복사되었습니다.');
   } else {
     navigator.clipboard.writeText(title).then(() => showToast('클립보드에 복사되었습니다.'));
-  }
-}
-
-async function searchCategoryNews(category) {
-  document.querySelectorAll('.btn-cat').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
-  activeCatBtn = event.target;
-
-  // 체크 초기화
-  checkedArticles = [];
-  updateCheckCounter();
-  document.getElementById('title-result-box').style.display = 'none';
-
-  const box = document.getElementById('cat-news-box');
-  const list = document.getElementById('cat-news-list');
-  const title = document.getElementById('cat-news-title');
-
-  box.style.display = 'block';
-  title.textContent = `📰 유명인 + ${category} 뉴스/블로그`;
-  list.innerHTML = '<div style="padding:14px;color:#64748b;font-size:0.9em;">검색 중... (잠시만 기다려주세요)</div>';
-
-  try {
-    const res = await fetch(`/api/research/category-news?category=${encodeURIComponent(category)}`);
-    const data = await res.json();
-
-    if (!data.articles || data.articles.length === 0) {
-      list.innerHTML = '<div style="padding:14px;color:#94a3b8;">검색 결과가 없습니다.</div>';
-      return;
-    }
-
-    // 헤더
-    let html = `
-      <div style="display:grid;grid-template-columns:40px 56px 1fr 115px;background:#f8fafc;border-bottom:2px solid #e2e8f0;font-size:0.8em;font-weight:600;color:#64748b;">
-        <div style="padding:8px 10px;text-align:center;">
-          <input type="checkbox" title="전체선택 불가 - 개별 선택" disabled style="cursor:not-allowed;opacity:0.3;">
-        </div>
-        <div style="padding:8px 10px;">유형</div>
-        <div style="padding:8px 10px;">제목</div>
-        <div style="padding:8px 10px;text-align:center;">발행일</div>
-      </div>`;
-
-    html += data.articles.map((item, i) => {
-      const isNews = item.type === '뉴스';
-      const bgColor = i % 2 === 0 ? '#fff' : '#fafafa';
-      const typeBg = isNews ? '#dbeafe' : '#f0fdf4';
-      const typeColor = isNews ? '#1d4ed8' : '#15803d';
-      const safeTitle = item.title.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-      const safeLink = item.link.replace(/'/g, "\\'");
-
-      return `
-        <div style="display:grid;grid-template-columns:40px 56px 1fr 115px;background:${bgColor};border-bottom:1px solid #f1f5f9;align-items:center;">
-          <div style="padding:9px 10px;text-align:center;">
-            <input type="checkbox" data-idx="${i}" data-title="${safeTitle}" data-link="${safeLink}"
-                   onchange="toggleArticleCheck(${i}, this.dataset.title, this.dataset.link, this)"
-                   style="cursor:pointer;width:15px;height:15px;accent-color:#7c3aed;">
-          </div>
-          <div style="padding:9px 10px;">
-            <span style="display:inline-block;font-size:0.72em;padding:3px 7px;border-radius:8px;white-space:nowrap;background:${typeBg};color:${typeColor};font-weight:600;">${item.type}</span>
-          </div>
-          <div style="padding:9px 10px;">
-            <a href="${item.link}" target="_blank"
-               style="font-size:0.88em;color:#1e293b;text-decoration:none;line-height:1.5;"
-               onmouseover="this.style.color='#4f46e5'" onmouseout="this.style.color='#1e293b'">
-              ${item.title}
-            </a>
-          </div>
-          <div style="padding:9px 10px;text-align:center;font-size:0.82em;color:#94a3b8;white-space:nowrap;">
-            ${formatDate(item.pubDate)}
-          </div>
-        </div>`;
-    }).join('');
-
-    list.innerHTML = html;
-    title.textContent = `📰 유명인 + ${category} — 총 ${data.total}건`;
-
-  } catch(e) {
-    list.innerHTML = `<div style="padding:14px;color:#ef4444;">오류 발생: ${e.message}</div>`;
   }
 }
 
