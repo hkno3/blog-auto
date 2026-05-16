@@ -98,12 +98,31 @@
 
     <!-- 결과 패널 -->
     <div id="cat-news-box" style="display:none;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
         <strong id="cat-news-title" style="font-size:0.95em;color:#334155;"></strong>
-        <button onclick="document.getElementById('cat-news-box').style.display='none'"
-                style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:1.2em;">✕</button>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span id="check-counter" style="font-size:0.82em;color:#7c3aed;font-weight:600;display:none;">
+            선택: <span id="check-count">0</span>/5
+          </span>
+          <button id="btn-gen-titles" onclick="generateTitles()"
+                  style="display:none;background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:0.85em;cursor:pointer;font-weight:600;">
+            AI 제목 생성
+          </button>
+          <button onclick="document.getElementById('cat-news-box').style.display='none'"
+                  style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:1.2em;">✕</button>
+        </div>
       </div>
       <div id="cat-news-list" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;max-height:500px;overflow-y:auto;"></div>
+    </div>
+
+    <!-- AI 제목 결과 패널 -->
+    <div id="title-result-box" style="display:none;margin-top:16px;border:2px solid #7c3aed;border-radius:10px;overflow:hidden;">
+      <div style="background:#7c3aed;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;">
+        <strong style="color:#fff;font-size:0.95em;">AI 생성 제목 결과</strong>
+        <button onclick="document.getElementById('title-result-box').style.display='none'"
+                style="background:none;border:none;cursor:pointer;color:#fff;font-size:1.1em;">✕</button>
+      </div>
+      <div id="title-result-list" style="padding:12px;background:#faf5ff;"></div>
     </div>
   </div>
 
@@ -372,12 +391,108 @@ function formatDate(dateStr) {
 
 // ─── 카테고리별 유명인 뉴스 탐색 ────────────────────
 let activeCatBtn = null;
+let checkedArticles = [];  // {title, link}
+
+function updateCheckCounter() {
+  const count = checkedArticles.length;
+  const counter = document.getElementById('check-counter');
+  const countEl = document.getElementById('check-count');
+  const btnGen = document.getElementById('btn-gen-titles');
+  countEl.textContent = count;
+  counter.style.display = count > 0 ? 'inline' : 'none';
+  btnGen.style.display = count > 0 ? 'inline-block' : 'none';
+}
+
+function toggleArticleCheck(idx, title, link, checkbox) {
+  if (checkbox.checked) {
+    if (checkedArticles.length >= 5) {
+      checkbox.checked = false;
+      showToast('최대 5개까지만 선택할 수 있습니다.');
+      return;
+    }
+    checkedArticles.push({idx, title, link});
+  } else {
+    checkedArticles = checkedArticles.filter(a => a.idx !== idx);
+  }
+  updateCheckCounter();
+}
+
+async function generateTitles() {
+  if (checkedArticles.length === 0) {
+    showToast('기사를 선택해주세요.');
+    return;
+  }
+
+  const resultBox = document.getElementById('title-result-box');
+  const resultList = document.getElementById('title-result-list');
+  const btnGen = document.getElementById('btn-gen-titles');
+
+  resultBox.style.display = 'block';
+  resultList.innerHTML = '<div style="padding:10px;color:#7c3aed;font-size:0.9em;">AI가 제목을 생성 중입니다... (10~30초 소요)</div>';
+  btnGen.disabled = true;
+  btnGen.textContent = '생성 중...';
+
+  try {
+    const res = await fetch('/api/ai/generate-titles', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({articles: checkedArticles.map(a => ({title: a.title, link: a.link}))})
+    });
+    const data = await res.json();
+
+    if (!data.success) {
+      resultList.innerHTML = `<div style="color:#ef4444;padding:10px;">오류: ${data.error}</div>`;
+      return;
+    }
+
+    let html = '';
+    data.results.forEach((result, i) => {
+      html += `
+        <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #e9d5ff;">
+          <div style="font-size:0.78em;color:#94a3b8;margin-bottom:6px;">원본: ${result.original_title}</div>
+          ${result.titles.map((t, ti) => `
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <span style="min-width:20px;font-size:0.75em;font-weight:700;color:#7c3aed;">${ti+1}</span>
+              <span style="flex:1;font-size:0.9em;color:#1e293b;font-weight:500;">${t}</span>
+              <button onclick="copyAndUseTitle('${t.replace(/'/g, "\\'")}')"
+                      style="background:#7c3aed;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:0.75em;cursor:pointer;white-space:nowrap;">
+                이 제목 사용
+              </button>
+            </div>`).join('')}
+        </div>`;
+    });
+
+    resultList.innerHTML = html;
+    resultBox.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+
+  } catch(e) {
+    resultList.innerHTML = `<div style="color:#ef4444;padding:10px;">오류: ${e.message}</div>`;
+  } finally {
+    btnGen.disabled = false;
+    btnGen.textContent = 'AI 제목 생성';
+  }
+}
+
+function copyAndUseTitle(title) {
+  const manualInput = document.getElementById('manual-keyword');
+  if (manualInput) {
+    manualInput.value = title;
+    manualInput.scrollIntoView({behavior: 'smooth', block: 'center'});
+    showToast(`제목이 키워드 입력란에 복사되었습니다.`);
+  } else {
+    navigator.clipboard.writeText(title).then(() => showToast('클립보드에 복사되었습니다.'));
+  }
+}
 
 async function searchCategoryNews(category) {
-  // 버튼 활성화 표시
   document.querySelectorAll('.btn-cat').forEach(b => b.classList.remove('active'));
   event.target.classList.add('active');
   activeCatBtn = event.target;
+
+  // 체크 초기화
+  checkedArticles = [];
+  updateCheckCounter();
+  document.getElementById('title-result-box').style.display = 'none';
 
   const box = document.getElementById('cat-news-box');
   const list = document.getElementById('cat-news-list');
@@ -398,7 +513,10 @@ async function searchCategoryNews(category) {
 
     // 헤더
     let html = `
-      <div style="display:grid;grid-template-columns:56px 1fr 115px;background:#f8fafc;border-bottom:2px solid #e2e8f0;font-size:0.8em;font-weight:600;color:#64748b;">
+      <div style="display:grid;grid-template-columns:40px 56px 1fr 115px;background:#f8fafc;border-bottom:2px solid #e2e8f0;font-size:0.8em;font-weight:600;color:#64748b;">
+        <div style="padding:8px 10px;text-align:center;">
+          <input type="checkbox" title="전체선택 불가 - 개별 선택" disabled style="cursor:not-allowed;opacity:0.3;">
+        </div>
         <div style="padding:8px 10px;">유형</div>
         <div style="padding:8px 10px;">제목</div>
         <div style="padding:8px 10px;text-align:center;">발행일</div>
@@ -409,9 +527,16 @@ async function searchCategoryNews(category) {
       const bgColor = i % 2 === 0 ? '#fff' : '#fafafa';
       const typeBg = isNews ? '#dbeafe' : '#f0fdf4';
       const typeColor = isNews ? '#1d4ed8' : '#15803d';
+      const safeTitle = item.title.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+      const safeLink = item.link.replace(/'/g, "\\'");
 
       return `
-        <div style="display:grid;grid-template-columns:56px 1fr 115px;background:${bgColor};border-bottom:1px solid #f1f5f9;align-items:center;">
+        <div style="display:grid;grid-template-columns:40px 56px 1fr 115px;background:${bgColor};border-bottom:1px solid #f1f5f9;align-items:center;">
+          <div style="padding:9px 10px;text-align:center;">
+            <input type="checkbox" data-idx="${i}" data-title="${safeTitle}" data-link="${safeLink}"
+                   onchange="toggleArticleCheck(${i}, this.dataset.title, this.dataset.link, this)"
+                   style="cursor:pointer;width:15px;height:15px;accent-color:#7c3aed;">
+          </div>
           <div style="padding:9px 10px;">
             <span style="display:inline-block;font-size:0.72em;padding:3px 7px;border-radius:8px;white-space:nowrap;background:${typeBg};color:${typeColor};font-weight:600;">${item.type}</span>
           </div>

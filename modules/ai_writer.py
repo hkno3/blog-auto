@@ -209,3 +209,117 @@ def _validate_content(result: dict, keyword: str):
 
     if keyword.lower() not in result["content"].lower() and keyword.lower() not in result["title"].lower():
         add_log(f"경고: 키워드 '{keyword}'가 글에 포함되지 않음", "WARN")
+
+
+def generate_seo_titles(articles: list[dict]) -> list[dict]:
+    """
+    뉴스 기사 목록(최대 5개)을 한 번의 Gemini 호출로 SEO 제목 3개씩 생성
+    articles: [{"title": str, "content": str}, ...]
+    반환: [{"original_title": str, "titles": [str, str, str]}, ...]
+    """
+    if not articles:
+        return []
+
+    articles = articles[:5]
+
+    article_blocks = []
+    for i, art in enumerate(articles, 1):
+        block = f"[기사{i}]\n뉴스 제목: {art['title']}\n본문 발췌:\n{art.get('content', '(본문 없음)')}"
+        article_blocks.append(block)
+
+    articles_text = "\n\n".join(article_blocks)
+
+    prompt = f"""당신은 SEO 전문 블로그 작가입니다.
+아래 각 기사를 읽고, 각 기사마다 블로그 제목을 3개씩 생성하세요.
+
+[제목 작성 규칙 v2.0 - 반드시 준수]
+1. 길이: 공백 포함 24자 ~ 30자 이내
+2. 핵심 키워드를 제목 맨 앞 15자 이내에 배치
+3. 문맥적 병합: 키워드와 심리 자극 요소를 하나의 완성된 문장으로 구성
+   - 나쁜 예: "공황장애 증상, 3분 만에 끝내는 핵심 정리"
+   - 좋은 예: "공황장애 증상 3분 만에 자가진단하고 대처하는 법"
+4. 동사 위주 능동형 표현 사용
+5. 3개 제목은 각각 다른 심리 자극 요소 사용:
+   - 이득(Value), 손실(Loss), 비교(Analysis), 효율(Time), 안전(Caution) 중에서
+6. 숫자 구체화 권장 (예: "연간 24만원 절약", "2주 만에 변화")
+7. 금지: 특수문자, 홍보성 단어(무료·강추·이벤트·1위 등)
+
+[기사 목록]
+{articles_text}
+
+[응답 형식 - 반드시 이 형식만 사용]
+기사1:
+1. 제목
+2. 제목
+3. 제목
+
+기사2:
+1. 제목
+2. 제목
+3. 제목
+
+(기사 수만큼 반복)"""
+
+    add_log(f"SEO 제목 생성 시작: 기사 {len(articles)}개")
+    retry_delays = [10, 20, 40, 60]
+    last_error = None
+
+    for attempt in range(len(retry_delays) + 1):
+        try:
+            client = _get_client()
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+            )
+            text = response.text
+
+            usage = getattr(response, "usage_metadata", None)
+            if usage:
+                pt = getattr(usage, "prompt_token_count", 0) or 0
+                ct = getattr(usage, "candidates_token_count", 0) or 0
+                tt = getattr(usage, "total_token_count", 0) or (pt + ct)
+                record_gemini_usage(pt, ct, tt)
+                add_log(f"Gemini 토큰 사용: 입력 {pt} + 출력 {ct} = {tt}개")
+
+            results = _parse_titles_response(text, articles)
+            add_log(f"SEO 제목 생성 완료: {len(results)}개 기사")
+            return results
+
+        except Exception as e:
+            last_error = e
+            err_str = str(e)
+            if "503" in err_str and attempt < len(retry_delays):
+                delay = retry_delays[attempt]
+                add_log(f"Gemini 503 과부하 - {delay}초 후 재시도 ({attempt + 1}/{len(retry_delays)})", "WARN")
+                time.sleep(delay)
+            else:
+                add_log(f"SEO 제목 생성 실패: {e}", "ERROR")
+                raise
+
+    raise last_error
+
+
+def _parse_titles_response(text: str, articles: list[dict]) -> list[dict]:
+    """Gemini 응답에서 기사별 제목 3개 파싱"""
+    results = []
+    for i, art in enumerate(articles, 1):
+        pattern = rf"기사{i}[:\s]*\n((?:.*\n?){{1,6}})"
+        match = re.search(pattern, text)
+        titles = []
+        if match:
+            block = match.group(1)
+            for line in block.strip().splitlines():
+                line = re.sub(r"^\s*\d+\.\s*", "", line).strip()
+                if line and not line.startswith("기사"):
+                    titles.append(line)
+                if len(titles) >= 3:
+                    break
+
+        while len(titles) < 3:
+            titles.append(f"{art['title'][:20]} 완벽 정리")
+
+        results.append({
+            "original_title": art["title"],
+            "titles": titles[:3],
+        })
+    return results
