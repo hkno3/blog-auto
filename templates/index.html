@@ -344,7 +344,7 @@ async function loadCelebrityKeywords() {
   showToast('유명인 키워드 수집 중... 잠시만 기다려주세요.');
 
   try {
-    const res = await fetch('/api/keywords/celebrity?count=20');
+    const res = await fetch('/api/keywords/celebrity?count=50');
     const data = await res.json();
 
     const loading = document.getElementById('kw-loading');
