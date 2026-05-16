@@ -18,14 +18,56 @@ MAX_ARTICLES = 5
 
 # 카테고리별 검색 쿼리
 CATEGORY_QUERIES = {
-    "건강": ["배우 건강", "가수 건강", "선수 건강 관리", "연예인 건강 비결", "스타 건강"],
-    "다이어트": ["배우 다이어트", "가수 다이어트", "연예인 식단", "스타 체중", "연예인 몸매 비결"],
-    "부동산": ["연예인 부동산", "배우 아파트", "가수 집 매입", "스타 부동산", "연예인 주택"],
-    "사업": ["배우 창업", "가수 사업", "연예인 브랜드", "스타 사업 시작", "연예인 회사"],
-    "투자": ["연예인 투자", "배우 재테크", "가수 주식", "스타 자산 관리"],
-    "패션": ["배우 패션", "가수 스타일", "연예인 패션 비결", "스타 코디"],
-    "피부": ["배우 피부 관리", "가수 피부", "연예인 피부 비결", "스타 피부 관리법"],
-    "운동": ["배우 운동", "가수 운동 루틴", "선수 트레이닝", "연예인 헬스", "스타 운동법"],
+    "건강": [
+        "배우 건강", "가수 건강", "선수 건강 관리", "연예인 건강 비결", "스타 건강",
+        "배우 다이어트", "가수 다이어트", "연예인 식단", "스타 체중", "연예인 몸매 비결",
+        "배우 피부 관리", "가수 피부", "연예인 피부 비결", "스타 피부 관리법",
+        "배우 운동", "가수 운동 루틴", "선수 트레이닝", "연예인 헬스", "스타 운동법",
+    ],
+    "부동산": [
+        "연예인 부동산", "배우 아파트", "가수 집 매입", "스타 부동산", "연예인 주택",
+    ],
+    "사업": [
+        "배우 창업", "가수 사업", "연예인 브랜드", "스타 사업 시작", "연예인 회사",
+    ],
+    "투자": [
+        "연예인 투자", "배우 재테크", "가수 주식", "스타 자산 관리",
+    ],
+}
+
+# 카테고리별 필터링 단어 (제목에 하나라도 포함되어야 통과)
+CATEGORY_FILTERS = {
+    "건강": [
+        "건강", "질병", "병원", "수술", "치료", "투병", "건강검진", "건강관리", "건강비결",
+        "건강식", "건강법", "면역", "영양", "비타민", "보조식품", "처방", "진단",
+        "당뇨", "고혈압", "암", "디스크", "관절", "통풍", "갑상선", "빈혈", "두통", "불면",
+        "수면", "피로", "스트레스", "우울", "공황", "정신건강", "금연", "금주", "시력",
+        "다이어트", "식단", "체중", "감량", "살", "몸매", "비만", "뱃살", "체지방",
+        "칼로리", "단식", "절식", "간헐적단식", "저탄고지", "키토", "채식",
+        "감식", "식이조절", "체형", "몸무게", "군살", "허리", "복근",
+        "피부", "스킨케어", "피부관리", "피부과", "시술", "보톡스", "필러",
+        "레이저", "리프팅", "화장품", "세럼", "에센스", "크림", "선크림",
+        "여드름", "기미", "주름", "탄력", "모공", "각질", "보습", "미백",
+        "운동", "헬스", "트레이닝", "PT", "근육", "근력", "유산소", "요가",
+        "필라테스", "수영", "달리기", "자전거", "등산", "골프", "테니스",
+        "스쿼트", "벤치프레스", "체력", "스트레칭", "홈트",
+    ],
+    "부동산": [
+        "부동산", "아파트", "집", "빌라", "주택", "오피스텔", "상가", "건물",
+        "매입", "매매", "매수", "전세", "월세", "임대", "분양", "청약",
+        "저택", "펜트하우스", "타운하우스", "토지", "땅", "재개발", "재건축",
+        "이사", "입주", "거주", "평수", "인테리어",
+    ],
+    "사업": [
+        "사업", "창업", "회사", "브랜드", "론칭", "대표", "CEO", "설립",
+        "카페", "식당", "레스토랑", "팝업", "매장", "가게", "프랜차이즈",
+        "매출", "수익", "사업가", "기업", "스타트업", "투자유치", "협업", "계약",
+    ],
+    "투자": [
+        "투자", "재테크", "주식", "코인", "펀드", "ETF", "채권", "금",
+        "수익률", "자산", "포트폴리오", "배당", "절세", "세금", "절약",
+        "연금", "적금", "예금", "부업", "수입", "월급", "연봉", "수익구조",
+    ],
 }
 
 
@@ -144,31 +186,39 @@ def search_naver_blog(keyword: str, display: int = MAX_ARTICLES) -> list[dict]:
         return []
 
 
-def search_celebrity_category(category: str, max_total: int = 150) -> list[dict]:
+def _passes_filter(title: str, category: str) -> bool:
+    """제목에 카테고리 필터 단어가 하나라도 포함되면 True"""
+    words = CATEGORY_FILTERS.get(category, [])
+    if not words:
+        return True
+    return any(w in title for w in words)
+
+
+def search_celebrity_category(category: str, max_total: int = 200) -> list[dict]:
     """
-    유명인 + 카테고리 뉴스/블로그 검색 (최대 max_total개, 최신순)
+    유명인 + 카테고리 뉴스/블로그 검색 (최대 max_total개, 최신순, 필터링 적용)
     반환: [{type, title, link, pubDate, query}]
     """
     queries = CATEGORY_QUERIES.get(category, [f"연예인 {category}"])
-    display_per_query = min(100, max(20, max_total // len(queries) + 10))
+    display_per_query = 100
     seen_titles = set()
     results = []
 
     for query in queries:
         for item in search_naver_news(query, display=display_per_query):
             t = item["title"]
-            if t and t not in seen_titles:
+            if t and t not in seen_titles and _passes_filter(t, category):
                 seen_titles.add(t)
                 results.append({**item, "type": "뉴스", "query": query})
         for item in search_naver_blog(query, display=display_per_query // 2):
             t = item["title"]
-            if t and t not in seen_titles:
+            if t and t not in seen_titles and _passes_filter(t, category):
                 seen_titles.add(t)
                 results.append({**item, "type": "블로그", "query": query})
 
     results.sort(key=lambda x: _date_sortkey(x.get("pubDate", "")), reverse=True)
     results = results[:max_total]
-    add_log(f"카테고리 [{category}] 검색: {len(results)}건")
+    add_log(f"카테고리 [{category}] 검색: {len(results)}건 (필터링 적용)")
     return results
 
 
