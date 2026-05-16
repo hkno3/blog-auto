@@ -131,6 +131,26 @@ def api_keywords_suggest():
     return jsonify({"keywords": results})
 
 
+# ─── 뉴스 리서치 미리보기 ─────────────────────────────
+
+@app.route("/api/research/titles")
+def api_research_titles():
+    keyword = request.args.get("keyword", "").strip()
+    if not keyword:
+        return jsonify({"titles": []})
+    from modules.content_researcher import search_naver_news, search_naver_blog
+    news = search_naver_news(keyword, display=10)
+    blogs = search_naver_blog(keyword, display=5)
+    titles = []
+    for item in news:
+        if item.get("title"):
+            titles.append({"type": "뉴스", "title": item["title"], "link": item.get("link", "")})
+    for item in blogs:
+        if item.get("title"):
+            titles.append({"type": "블로그", "title": item["title"], "link": item.get("link", "")})
+    return jsonify({"titles": titles})
+
+
 # ─── 유명인 키워드 ────────────────────────────────────
 
 @app.route("/api/keywords/celebrity")
