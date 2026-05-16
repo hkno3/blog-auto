@@ -208,7 +208,7 @@ def get_celebrity_names(max_count: int = 40) -> list[tuple[str, str]]:
     if has_naver:
         add_log("네이버 뉴스 검색으로 유명인 수집 시작")
         for query, default_cat in _SEARCH_QUERIES:
-            titles = _search_naver_news(query, display=20)
+            titles = _search_naver_news(query, display=50)
             for title in titles:
                 if _has_negative_news(title):
                     continue
@@ -229,12 +229,12 @@ def get_celebrity_names(max_count: int = 40) -> list[tuple[str, str]]:
     return results[:max_count]
 
 
-def get_celebrity_keywords(count: int = 20) -> list[str]:
+def get_celebrity_keywords(count: int = 50) -> list[str]:
     """
     유명인 + 카테고리 조합 키워드 생성
     반환: ["김연아 건강 비결", "손흥민 운동 방법", ...]
     """
-    celebs = get_celebrity_names(max_count=count * 2)
+    celebs = get_celebrity_names(max_count=60)
     if not celebs:
         add_log("유명인 수집 결과 없음", "WARN")
         return []
@@ -242,19 +242,16 @@ def get_celebrity_keywords(count: int = 20) -> list[str]:
     keywords = []
     seen_keywords = set()
 
-    # 카테고리 인덱스를 순환시켜서 다양한 조합 생성
-    category_idx: dict[str, int] = {}
-
+    # 인물당 여러 카테고리 조합 생성
     for name, category in celebs:
         categories = _CELEB_CATEGORIES.get(category, _CELEB_CATEGORIES["기타"])
-        idx = category_idx.get(category, 0)
-        cat = categories[idx % len(categories)]
-        category_idx[category] = idx + 1
-
-        kw = f"{name} {cat}"
-        if kw not in seen_keywords:
-            seen_keywords.add(kw)
-            keywords.append(kw)
+        for cat in categories:
+            kw = f"{name} {cat}"
+            if kw not in seen_keywords:
+                seen_keywords.add(kw)
+                keywords.append(kw)
+            if len(keywords) >= count:
+                break
         if len(keywords) >= count:
             break
 

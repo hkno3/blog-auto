@@ -83,7 +83,18 @@
       <input type="text" id="manual-keyword" placeholder="입력 없이 추천 키워드 선택 가능">
       <button class="btn-secondary" onclick="loadKeywords()">키워드 추천</button>
       <button class="btn-secondary" style="background:#7c3aed;color:#fff;border-color:#7c3aed;" onclick="loadCelebrityKeywords()">⭐ 유명인 키워드</button>
+      <button class="btn-secondary" style="background:#0ea5e9;color:#fff;border-color:#0ea5e9;" onclick="searchNewsTitles()">🔍 뉴스 검색</button>
     </div>
+  </div>
+
+  <!-- 뉴스 기사 제목 목록 -->
+  <div id="news-titles-box" style="display:none; margin-bottom:16px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <strong style="font-size:0.95em; color:#334155;">📰 검색된 뉴스 기사 제목</strong>
+      <button onclick="document.getElementById('news-titles-box').style.display='none'"
+              style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:1.1em;">✕</button>
+    </div>
+    <div id="news-titles-list" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;"></div>
   </div>
 
   <!-- 번호 키워드 칩 -->
@@ -329,6 +340,40 @@ function getWritingSettings() {
   };
 }
 
+// ─── 뉴스 기사 제목 검색 ─────────────────────────────
+async function searchNewsTitles() {
+  const keyword = document.getElementById('manual-keyword').value.trim();
+  if (!keyword) {
+    showToast('키워드를 먼저 입력해주세요.', 'error');
+    return;
+  }
+
+  const box = document.getElementById('news-titles-box');
+  const list = document.getElementById('news-titles-list');
+  box.style.display = 'block';
+  list.innerHTML = '<div style="padding:12px;color:#64748b;font-size:0.9em;">검색 중...</div>';
+
+  const res = await fetch(`/api/research/titles?keyword=${encodeURIComponent(keyword)}`);
+  const data = await res.json();
+
+  if (!data.titles || data.titles.length === 0) {
+    list.innerHTML = '<div style="padding:12px;color:#94a3b8;font-size:0.9em;">검색 결과가 없습니다.</div>';
+    return;
+  }
+
+  list.innerHTML = data.titles.map((item, i) => `
+    <div style="padding:10px 14px;border-bottom:1px solid #f1f5f9;display:flex;align-items:flex-start;gap:10px;${i === data.titles.length-1 ? 'border-bottom:none;' : ''}">
+      <span style="font-size:0.75em;padding:2px 7px;border-radius:10px;white-space:nowrap;margin-top:2px;
+        background:${item.type === '뉴스' ? '#dbeafe' : '#f0fdf4'};
+        color:${item.type === '뉴스' ? '#1d4ed8' : '#15803d'};">${item.type}</span>
+      ${item.link
+        ? `<a href="${item.link}" target="_blank" style="font-size:0.9em;color:#1e293b;text-decoration:none;line-height:1.5;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${item.title}</a>`
+        : `<span style="font-size:0.9em;color:#1e293b;line-height:1.5;">${item.title}</span>`
+      }
+    </div>
+  `).join('');
+}
+
 // ─── 유명인 키워드 추천 ──────────────────────────────
 async function loadCelebrityKeywords() {
   const container = document.getElementById('keyword-list');
@@ -344,7 +389,7 @@ async function loadCelebrityKeywords() {
   showToast('유명인 키워드 수집 중... 잠시만 기다려주세요.');
 
   try {
-    const res = await fetch('/api/keywords/celebrity?count=20');
+    const res = await fetch('/api/keywords/celebrity?count=50');
     const data = await res.json();
 
     const loading = document.getElementById('kw-loading');
