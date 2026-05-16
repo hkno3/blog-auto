@@ -10,7 +10,6 @@ from modules.keyword_fetcher import get_fresh_keywords, _get_naver_autocomplete,
 from modules.blogger_uploader import check_auth_status
 from modules.scheduler import run_single_post, run_batch
 from modules.keyword_analyzer import analyze_keywords
-from modules.celebrity_fetcher import get_celebrity_keywords
 
 app = Flask(__name__)
 app.secret_key = "blog-auto-secret-2024"
@@ -54,8 +53,9 @@ def api_gemini_usage():
 def run_now():
     data = request.json or {}
     keywords = data.get("keywords", [])
+    titles = data.get("titles", [])
     manual = data.get("keyword", "").strip()
-    if not keywords and manual:
+    if not keywords and not titles and manual:
         keywords = [manual]
 
     settings = {
@@ -63,15 +63,15 @@ def run_now():
         "min_content_length": int(data.get("min_content_length", 800)),
         "writing_style": data.get("writing_style", ""),
     }
-    count = len(keywords) or 1
+    count = len(keywords) + len(titles) or 1
 
     def _run():
-        run_batch(keywords=keywords or None, count=count, scheduled=False, settings=settings)
+        run_batch(keywords=keywords or None, titles=titles or None, count=count, scheduled=False, settings=settings)
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
-    kw_str = ", ".join(keywords) if keywords else "자동"
-    add_log(f"즉시 실행 요청: {count}개 ({kw_str})")
+    total_str = f"확정제목 {len(titles)}개 + 키워드 {len(keywords)}개" if titles else (", ".join(keywords) if keywords else "자동")
+    add_log(f"즉시 실행 요청: {count}개 ({total_str})")
     return jsonify({"success": True, "message": f"{count}개 글 작성을 시작했습니다."})
 
 
@@ -79,8 +79,9 @@ def run_now():
 def run_scheduled():
     data = request.json or {}
     keywords = data.get("keywords", [])
+    titles = data.get("titles", [])
     interval = int(data.get("interval_minutes", 60))
-    count = len(keywords) or int(data.get("count", 1))
+    count = len(keywords) + len(titles) or int(data.get("count", 1))
 
     settings = {
         "image_count": int(data.get("image_count", 5)),
@@ -89,13 +90,13 @@ def run_scheduled():
     }
 
     def _run():
-        run_batch(keywords=keywords or None, count=count,
+        run_batch(keywords=keywords or None, titles=titles or None, count=count,
                   interval_minutes=interval, scheduled=True, settings=settings)
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
-    kw_str = ", ".join(keywords) if keywords else "자동"
-    add_log(f"예약 실행 요청: {count}개 ({interval}분 간격) - {kw_str}")
+    total_str = f"확정제목 {len(titles)}개 + 키워드 {len(keywords)}개" if titles else (", ".join(keywords) if keywords else "자동")
+    add_log(f"예약 실행 요청: {count}개 ({interval}분 간격) - {total_str}")
     return jsonify({"success": True, "message": f"{count}개 글을 {interval}분 간격으로 예약했습니다."})
 
 
@@ -209,15 +210,6 @@ def api_generate_titles():
 
 # ─── 유명인 키워드 ────────────────────────────────────
 
-@app.route("/api/keywords/celebrity")
-def api_keywords_celebrity():
-    count = int(request.args.get("count", 20))
-    try:
-        keywords = get_celebrity_keywords(count=count)
-        return jsonify({"keywords": keywords})
-    except Exception as e:
-        add_log(f"유명인 키워드 수집 오류: {e}", "ERROR")
-        return jsonify({"keywords": [], "error": str(e)})
 
 
 # ─── 수익형 키워드 분석 ────────────────────────────────

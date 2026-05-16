@@ -82,7 +82,6 @@
     <div class="input-with-btn">
       <input type="text" id="manual-keyword" placeholder="입력 없이 추천 키워드 선택 가능">
       <button class="btn-secondary" onclick="loadKeywords()">키워드 추천</button>
-      <button class="btn-secondary" style="background:#7c3aed;color:#fff;border-color:#7c3aed;" onclick="loadCelebrityKeywords()">⭐ 유명인 키워드</button>
     </div>
   </div>
 
@@ -137,6 +136,15 @@
     선택된 키워드: <span id="selected-count">0</span>개
     <span id="selected-labels"></span>
     <button class="btn-clear" onclick="clearSelection()">선택 초기화</button>
+  </div>
+
+  <!-- AI 제목 대기열 -->
+  <div id="title-queue-wrap" style="display:none;margin-top:10px;border:1px solid #e9d5ff;border-radius:8px;overflow:hidden;">
+    <div style="background:#f5f3ff;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e9d5ff;">
+      <span style="font-size:0.85em;font-weight:600;color:#7c3aed;">AI 확정 제목 대기열</span>
+      <button onclick="clearTitleQueue()" style="background:none;border:none;cursor:pointer;font-size:0.78em;color:#94a3b8;">전체 삭제</button>
+    </div>
+    <div id="title-queue-list" style="padding:8px 10px;display:flex;flex-direction:column;gap:5px;"></div>
   </div>
 
   <!-- 실행 버튼 -->
@@ -585,75 +593,58 @@ async function generateTitles() {
   }
 }
 
+// AI 제목 대기열
+let titleQueue = [];
+
 function copyAndUseTitle(title) {
-  const manualInput = document.getElementById('manual-keyword');
-  if (manualInput) {
-    manualInput.value = title;
-    manualInput.scrollIntoView({behavior: 'smooth', block: 'center'});
-    showToast('제목이 키워드 입력란에 복사되었습니다.');
-  } else {
-    navigator.clipboard.writeText(title).then(() => showToast('클립보드에 복사되었습니다.'));
+  if (titleQueue.includes(title)) {
+    showToast('이미 대기열에 있는 제목입니다.');
+    return;
   }
+  titleQueue.push(title);
+  renderTitleQueue();
+  showToast('AI 제목 대기열에 추가되었습니다.');
 }
 
-// ─── 유명인 키워드 추천 ──────────────────────────────
-async function loadCelebrityKeywords() {
-  const container = document.getElementById('keyword-list');
-  const header = document.getElementById('keyword-list-header');
-
-  const loadingEl = document.createElement('span');
-  loadingEl.id = 'kw-loading';
-  loadingEl.style.cssText = 'color:#7c3aed;font-size:13px;align-self:center;';
-  loadingEl.textContent = '⭐ 유명인 트렌드 수집 중... (10~20초 소요)';
-  container.appendChild(loadingEl);
-  container.style.display = 'flex';
-  header.style.display = 'flex';
-  showToast('유명인 키워드 수집 중... 잠시만 기다려주세요.');
-
-  try {
-    const res = await fetch('/api/keywords/celebrity?count=50');
-    const data = await res.json();
-
-    const loading = document.getElementById('kw-loading');
-    if (loading) loading.remove();
-
-    if (!data.keywords || data.keywords.length === 0) {
-      showToast('유명인 키워드를 가져오지 못했습니다.', 'error');
-      return;
-    }
-
-    const existingKws = new Set(
-      [...container.querySelectorAll('.chip')].map(c => c.dataset.kw)
-    );
-
-    const newHtml = data.keywords
-      .filter(kw => !existingKws.has(kw))
-      .map(kw =>
-        `<span class="chip" data-kw="${kw.replace(/"/g,'&quot;')}" style="border-color:#7c3aed;" onclick="toggleKeyword(this, '${kw.replace(/'/g,"\\'")}')">
-          <span class="chip-num"></span>⭐ ${kw}<button class="chip-del" onclick="event.stopPropagation();deleteKeyword(this,'${kw.replace(/'/g,"\\'")}')">×</button>
-        </span>`
-      ).join('');
-
-    container.insertAdjacentHTML('beforeend', newHtml);
-    renumberChips();
-    showToast(`유명인 키워드 ${data.keywords.length}개 추가됨`, 'success');
-  } catch (e) {
-    const loading = document.getElementById('kw-loading');
-    if (loading) loading.remove();
-    showToast('유명인 키워드 수집 실패', 'error');
+function renderTitleQueue() {
+  const wrap = document.getElementById('title-queue-wrap');
+  const list = document.getElementById('title-queue-list');
+  if (titleQueue.length === 0) {
+    wrap.style.display = 'none';
+    return;
   }
+  wrap.style.display = 'block';
+  list.innerHTML = titleQueue.map((t, i) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:5px 4px;border-bottom:1px solid #f3e8ff;">
+      <span style="min-width:20px;font-size:0.75em;font-weight:700;color:#7c3aed;">${i+1}</span>
+      <span style="flex:1;font-size:0.87em;color:#1e293b;">${t}</span>
+      <button onclick="removeTitleFromQueue(${i})"
+              style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:1em;padding:0 4px;">×</button>
+    </div>`).join('');
+}
+
+function removeTitleFromQueue(idx) {
+  titleQueue.splice(idx, 1);
+  renderTitleQueue();
+}
+
+function clearTitleQueue() {
+  titleQueue = [];
+  renderTitleQueue();
 }
 
 // ─── 즉시 실행 ────────────────────────────────────────
 async function runNow() {
   const keywords = getKeywordsToRun();
+  const titles = [...titleQueue];
   const settings = getWritingSettings();
+  const count = keywords.length + titles.length || 1;
 
   showProgress();
   const res = await fetch('/run/now', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ keywords, count: keywords.length || 1, ...settings })
+    body: JSON.stringify({ keywords, titles, count, ...settings })
   });
   const data = await res.json();
   showToast(data.message, data.success ? 'success' : 'error');
@@ -663,14 +654,16 @@ async function runNow() {
 // ─── 예약 실행 ────────────────────────────────────────
 async function runEveryInterval() {
   const keywords = getKeywordsToRun();
+  const titles = [...titleQueue];
   const settings = getWritingSettings();
-  const count = keywords.length || 1;
+  const count = keywords.length + titles.length || 1;
 
   const res = await fetch('/run/scheduled', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
       keywords,
+      titles,
       count,
       interval_minutes: settings.interval_minutes,
       ...settings
