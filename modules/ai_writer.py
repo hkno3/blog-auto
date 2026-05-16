@@ -16,11 +16,20 @@ def _get_client():
     return genai.Client(api_key=api_key)
 
 
-def _build_prompt(keyword: str, style: str = "") -> str:
+def _build_prompt(keyword: str, style: str = "", research_context: str = "") -> str:
     style_guide = style or get_setting("writing_style") or "친근하고 정보성 있는 블로그 말투"
+
+    research_section = ""
+    if research_context:
+        research_section = f"""
+[참고 자료 - 아래 내용을 참고하여 글을 작성하되, 절대 그대로 복사하지 말 것. 핵심 정보만 재구성하여 활용]
+{research_context}
+
+"""
+
     return f"""
 당신은 SEO 전문 블로그 작가입니다.
-아래 키워드(포커스 키워드)를 주제로 블로그 글을 작성해주세요.
+{research_section}아래 키워드(포커스 키워드)를 주제로 블로그 글을 작성해주세요.
 
 [포커스 키워드]
 {keyword}
@@ -110,22 +119,29 @@ def _build_prompt(keyword: str, style: str = "") -> str:
 """
 
 
-def generate_post(keyword: str, style: str = "") -> dict:
+def generate_post(keyword: str, style: str = "", research_context: str = "") -> dict:
     """
     키워드로 SEO 최적화 글 생성
+    research_context: 네이버 검색으로 수집한 참고 자료 (옵션)
     반환: {title, meta, content, tags, category}
     503 과부하 시 최대 4회 재시도 (10→20→40→60초 간격)
     """
-    add_log(f"AI 글쓰기 시작: {keyword}")
+    add_log(f"AI 글쓰기 시작: {keyword}" + (" (리서치 컨텍스트 포함)" if research_context else ""))
     retry_delays = [10, 20, 40, 60]
     last_error = None
 
     for attempt in range(len(retry_delays) + 1):
         try:
+            from google.genai import types
             client = _get_client()
-            prompt = _build_prompt(keyword, style)
+            prompt = _build_prompt(keyword, style, research_context)
+            # Gemini Grounding: 인터넷 검색으로 최신 정보 보완
             response = client.models.generate_content(
-                model="gemini-2.5-flash", contents=prompt
+                model="gemini-2.5-flash",
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    tools=[types.Tool(google_search=types.GoogleSearch())]
+                ),
             )
             text = response.text
 
