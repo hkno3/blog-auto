@@ -327,6 +327,7 @@ def _parse_titles_response(text: str, articles: list[dict]) -> list[dict]:
             block = match.group(1)
             for line in block.strip().splitlines():
                 line = re.sub(r"^\s*\d+\.\s*", "", line).strip()
+                line = re.sub(r"\s*\((이득|손실|분석|비교|효율|안전|Value|Loss|Analysis|Time|Caution)\)\s*$", "", line).strip()
                 if line and not line.startswith("기사"):
                     titles.append(line)
                 if len(titles) >= 3:
