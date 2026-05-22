@@ -651,12 +651,54 @@ function renderTitleQueue() {
   }
   wrap.style.display = 'block';
   list.innerHTML = titleQueue.map((t, i) => `
-    <div style="display:flex;align-items:center;gap:8px;padding:5px 4px;border-bottom:1px solid #f3e8ff;">
+    <div id="title-queue-item-${i}" style="display:flex;align-items:center;gap:8px;padding:5px 4px;border-bottom:1px solid #f3e8ff;">
       <span style="min-width:20px;font-size:0.75em;font-weight:700;color:#7c3aed;">${i+1}</span>
-      <span style="flex:1;font-size:0.87em;color:#1e293b;">${t}</span>
-      <button onclick="removeTitleFromQueue(${i})"
+      <span id="title-text-${i}" style="flex:1;font-size:0.87em;color:#1e293b;">${t}</span>
+      <input id="title-input-${i}" type="text" value="${t.replace(/"/g, '&quot;')}"
+             style="display:none;flex:1;font-size:0.87em;color:#1e293b;border:1px solid #c4b5fd;border-radius:4px;padding:2px 6px;outline:none;"
+             onkeydown="handleTitleEditKey(event, ${i})">
+      <button onclick="startEditTitle(${i})" id="edit-btn-${i}"
+              title="제목 수정"
+              style="background:none;border:none;cursor:pointer;color:#a78bfa;font-size:0.85em;padding:0 3px;">✏️</button>
+      <button onclick="confirmEditTitle(${i})" id="confirm-btn-${i}"
+              title="저장"
+              style="display:none;background:none;border:none;cursor:pointer;color:#16a34a;font-size:0.85em;padding:0 3px;">✓</button>
+      <button onclick="cancelEditTitle(${i})" id="cancel-btn-${i}"
+              title="취소"
+              style="display:none;background:none;border:none;cursor:pointer;color:#dc2626;font-size:0.85em;padding:0 3px;">✗</button>
+      <button onclick="removeTitleFromQueue(${i})" id="del-btn-${i}"
               style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:1em;padding:0 4px;">×</button>
     </div>`).join('');
+}
+
+function startEditTitle(idx) {
+  document.getElementById(`title-text-${idx}`).style.display = 'none';
+  document.getElementById(`title-input-${idx}`).style.display = 'block';
+  document.getElementById(`edit-btn-${idx}`).style.display = 'none';
+  document.getElementById(`confirm-btn-${idx}`).style.display = 'inline';
+  document.getElementById(`cancel-btn-${idx}`).style.display = 'inline';
+  document.getElementById(`del-btn-${idx}`).style.display = 'none';
+  const input = document.getElementById(`title-input-${idx}`);
+  input.focus();
+  input.select();
+}
+
+function confirmEditTitle(idx) {
+  const input = document.getElementById(`title-input-${idx}`);
+  const newTitle = input.value.trim();
+  if (!newTitle) { showToast('제목을 입력해주세요.'); return; }
+  titleQueue[idx] = newTitle;
+  renderTitleQueue();
+  showToast('제목이 수정되었습니다.');
+}
+
+function cancelEditTitle(idx) {
+  renderTitleQueue();
+}
+
+function handleTitleEditKey(event, idx) {
+  if (event.key === 'Enter') confirmEditTitle(idx);
+  else if (event.key === 'Escape') cancelEditTitle(idx);
 }
 
 function removeTitleFromQueue(idx) {
