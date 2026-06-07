@@ -128,6 +128,38 @@
     </div>
   </div>
 
+  <!-- 유튜브 영상 리서치 -->
+  <div class="form-group">
+    <label>🎬 유튜브 영상 리서치 <span style="font-size:0.8em;color:#94a3b8;">조회수순 검색 → 제목/대본 추출 → AI 제목 대기열에 추가</span></label>
+    <div class="input-with-btn">
+      <input type="text" id="yt-keyword" placeholder="검색 키워드 입력 (예: 다이어트 운동)">
+      <select id="yt-type" style="padding:8px;border:1px solid #d1d5db;border-radius:6px;">
+        <option value="all">전체</option>
+        <option value="shorts">쇼츠 (60초 이하)</option>
+        <option value="long">롱폼</option>
+      </select>
+      <button class="btn-secondary" onclick="searchYoutube()">검색</button>
+    </div>
+    <div id="yt-result-list" style="margin-top:10px;"></div>
+  </div>
+
+  <!-- 유튜브 대본 모달 -->
+  <div id="yt-transcript-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.5);z-index:1000;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:10px;max-width:640px;width:90%;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;">
+      <div style="background:#7c3aed;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">
+        <strong id="yt-transcript-title" style="color:#fff;font-size:0.95em;"></strong>
+        <button onclick="closeYtTranscriptModal()" style="background:none;border:none;cursor:pointer;color:#fff;font-size:1.1em;">✕</button>
+      </div>
+      <div id="yt-transcript-body" style="padding:16px;overflow-y:auto;font-size:0.88em;line-height:1.6;color:#334155;white-space:pre-wrap;"></div>
+      <div style="padding:10px 16px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:8px;">
+        <button id="yt-transcript-use-btn" onclick="useYoutubeWithTranscript()"
+                style="background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:0.85em;cursor:pointer;font-weight:600;">
+          이 제목 + 대본으로 글쓰기 대기열 추가
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- 번호 키워드 칩 -->
   <div id="keyword-list-header" style="display:none; justify-content: flex-end; margin-bottom: 4px;">
     <button class="btn-clear-all" onclick="clearAllKeywords()">전체 삭제</button>
@@ -629,17 +661,104 @@ async function generateTitles() {
   }
 }
 
+// ─── 유튜브 영상 리서치 ─────────────────────────────
+let ytSelected = null; // 대본 모달에서 선택된 영상 {video_id, title}
+
+function formatViewCount(n) {
+  if (n >= 100000000) return (n / 100000000).toFixed(1).replace(/\.0$/, '') + '억';
+  if (n >= 10000) return (n / 10000).toFixed(1).replace(/\.0$/, '') + '만';
+  return String(n);
+}
+
+async function searchYoutube() {
+  const keyword = document.getElementById('yt-keyword').value.trim();
+  const type = document.getElementById('yt-type').value;
+  const list = document.getElementById('yt-result-list');
+  if (!keyword) {
+    showToast('검색 키워드를 입력해주세요.');
+    return;
+  }
+  list.innerHTML = '<div style="padding:14px;color:#64748b;font-size:0.9em;">검색 중... (잠시만 기다려주세요)</div>';
+
+  try {
+    const res = await fetch(`/api/youtube/search?keyword=${encodeURIComponent(keyword)}&type=${type}`);
+    const data = await res.json();
+    if (!data.success) {
+      list.innerHTML = `<div style="padding:14px;color:#ef4444;">오류: ${data.error}</div>`;
+      return;
+    }
+    if (data.videos.length === 0) {
+      list.innerHTML = '<div style="padding:14px;color:#94a3b8;">검색 결과가 없습니다.</div>';
+      return;
+    }
+    list.innerHTML = data.videos.map(v => `
+      <div style="display:flex;gap:10px;align-items:center;padding:8px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;">
+        ${v.thumbnail ? `<img src="${v.thumbnail}" style="width:96px;height:54px;object-fit:cover;border-radius:5px;flex-shrink:0;">` : ''}
+        <div style="flex:1;min-width:0;">
+          <a href="${v.link}" target="_blank" style="font-size:0.88em;font-weight:600;color:#1e293b;text-decoration:none;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${v.title}</a>
+          <div style="font-size:0.78em;color:#64748b;margin-top:3px;">
+            👁 ${formatViewCount(v.view_count)} · ${v.channel} · ${v.duration_label} ·
+            <span style="color:${v.video_type === 'shorts' ? '#db2777' : '#2563eb'};font-weight:600;">${v.video_type === 'shorts' ? '쇼츠' : '롱폼'}</span>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0;">
+          <button onclick='copyAndUseTitle(${JSON.stringify(v.title)})'
+                  style="background:#e9d5ff;color:#7c3aed;border:none;border-radius:5px;padding:4px 10px;font-size:0.75em;cursor:pointer;white-space:nowrap;">제목만 사용</button>
+          <button onclick='openYtTranscriptModal(${JSON.stringify(v.video_id)}, ${JSON.stringify(v.title)})'
+                  style="background:#7c3aed;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:0.75em;cursor:pointer;white-space:nowrap;">대본 보기</button>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    list.innerHTML = `<div style="padding:14px;color:#ef4444;">오류: ${e.message}</div>`;
+  }
+}
+
+async function openYtTranscriptModal(videoId, title) {
+  ytSelected = { video_id: videoId, title, transcript: '' };
+  const modal = document.getElementById('yt-transcript-modal');
+  const body = document.getElementById('yt-transcript-body');
+  document.getElementById('yt-transcript-title').textContent = title;
+  document.getElementById('yt-transcript-use-btn').disabled = true;
+  body.innerHTML = '<div style="color:#64748b;">대본을 불러오는 중...</div>';
+  modal.style.display = 'flex';
+
+  try {
+    const res = await fetch(`/api/youtube/transcript?video_id=${encodeURIComponent(videoId)}`);
+    const data = await res.json();
+    if (!data.success) {
+      body.innerHTML = `<div style="color:#ef4444;">대본을 가져올 수 없습니다: ${data.error}</div>`;
+      return;
+    }
+    ytSelected.transcript = data.transcript;
+    body.textContent = data.transcript || '(대본 내용이 비어있습니다.)';
+    document.getElementById('yt-transcript-use-btn').disabled = !data.transcript;
+  } catch(e) {
+    body.innerHTML = `<div style="color:#ef4444;">오류: ${e.message}</div>`;
+  }
+}
+
+function closeYtTranscriptModal() {
+  document.getElementById('yt-transcript-modal').style.display = 'none';
+  ytSelected = null;
+}
+
+function useYoutubeWithTranscript() {
+  if (!ytSelected || !ytSelected.transcript) return;
+  copyAndUseTitle(ytSelected.title, ytSelected.transcript);
+  closeYtTranscriptModal();
+}
+
 // AI 제목 대기열
 let titleQueue = [];
 
-function copyAndUseTitle(title) {
-  if (titleQueue.includes(title)) {
+function copyAndUseTitle(title, reference) {
+  if (titleQueue.some(t => t.title === title)) {
     showToast('이미 대기열에 있는 제목입니다.');
     return;
   }
-  titleQueue.push(title);
+  titleQueue.push({ title, reference: reference || '' });
   renderTitleQueue();
-  showToast('AI 제목 대기열에 추가되었습니다.');
+  showToast(reference ? 'AI 제목 대기열에 추가되었습니다. (대본 참고자료 포함)' : 'AI 제목 대기열에 추가되었습니다.');
 }
 
 function renderTitleQueue() {
@@ -650,11 +769,11 @@ function renderTitleQueue() {
     return;
   }
   wrap.style.display = 'block';
-  list.innerHTML = titleQueue.map((t, i) => `
+  list.innerHTML = titleQueue.map((item, i) => `
     <div id="title-queue-item-${i}" style="display:flex;align-items:center;gap:8px;padding:5px 4px;border-bottom:1px solid #f3e8ff;">
       <span style="min-width:20px;font-size:0.75em;font-weight:700;color:#7c3aed;">${i+1}</span>
-      <span id="title-text-${i}" style="flex:1;font-size:0.87em;color:#1e293b;">${t}</span>
-      <input id="title-input-${i}" type="text" value="${t.replace(/"/g, '&quot;')}"
+      <span id="title-text-${i}" style="flex:1;font-size:0.87em;color:#1e293b;">${item.title}${item.reference ? ' <span style="color:#16a34a;font-size:0.78em;" title="유튜브 대본 참고자료 포함">🎬 대본 포함</span>' : ''}</span>
+      <input id="title-input-${i}" type="text" value="${item.title.replace(/"/g, '&quot;')}"
              style="display:none;flex:1;font-size:0.87em;color:#1e293b;border:1px solid #c4b5fd;border-radius:4px;padding:2px 6px;outline:none;"
              onkeydown="handleTitleEditKey(event, ${i})">
       <button onclick="startEditTitle(${i})" id="edit-btn-${i}"
@@ -687,7 +806,7 @@ function confirmEditTitle(idx) {
   const input = document.getElementById(`title-input-${idx}`);
   const newTitle = input.value.trim();
   if (!newTitle) { showToast('제목을 입력해주세요.'); return; }
-  titleQueue[idx] = newTitle;
+  titleQueue[idx].title = newTitle;
   renderTitleQueue();
   showToast('제목이 수정되었습니다.');
 }
@@ -714,7 +833,8 @@ function clearTitleQueue() {
 // ─── 즉시 실행 ────────────────────────────────────────
 async function runNow() {
   const keywords = getKeywordsToRun();
-  const titles = [...titleQueue];
+  const titles = titleQueue.map(t => t.title);
+  const references = titleQueue.map(t => t.reference || '');
   const settings = getWritingSettings();
   const count = keywords.length + titles.length || 1;
 
@@ -722,7 +842,7 @@ async function runNow() {
   const res = await fetch('/run/now', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ keywords, titles, count, ...settings })
+    body: JSON.stringify({ keywords, titles, references, count, ...settings })
   });
   const data = await res.json();
   showToast(data.message, data.success ? 'success' : 'error');
@@ -770,7 +890,8 @@ async function loadScheduledInfo() {
 
 async function confirmSchedule() {
   const keywords = getKeywordsToRun();
-  const titles = [...titleQueue];
+  const titles = titleQueue.map(t => t.title);
+  const references = titleQueue.map(t => t.reference || '');
   const settings = getWritingSettings();
   const count = keywords.length + titles.length || 1;
   const startTime = document.getElementById('schedule-start-time').value;
@@ -786,6 +907,7 @@ async function confirmSchedule() {
     body: JSON.stringify({
       keywords,
       titles,
+      references,
       count,
       start_time: startTime,
       interval_minutes: settings.interval_minutes,

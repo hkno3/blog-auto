@@ -36,10 +36,12 @@ def run_single_post(
     fixed_title: str = None,
     scheduled_at: str = None,
     settings: dict = None,
+    extra_reference: str = None,
 ) -> dict:
     """
     단일 글 작성 및 업로드 파이프라인
     fixed_title: AI 제목 대기열에서 선택한 확정 제목 (있으면 제목 고정, 본문만 생성)
+    extra_reference: 유튜브 대본 등 추가 참고자료 (있으면 리서치 컨텍스트 앞에 추가됨)
     settings: {image_count, min_content_length, writing_style}
     """
     settings = settings or {}
@@ -58,6 +60,9 @@ def run_single_post(
 
         # 2. 콘텐츠 리서치 (네이버 검색 API)
         research_context = get_research_context(keyword)
+        if extra_reference:
+            reference_section = f"[유튜브 영상 대본 참고자료]\n{extra_reference}"
+            research_context = f"{reference_section}\n\n{research_context}" if research_context else reference_section
 
         # 3. AI 글쓰기 (리서치 컨텍스트 + Gemini Grounding)
         style = settings.get("writing_style", "")
@@ -115,6 +120,7 @@ def run_single_post(
 def run_batch(
     keywords: list = None,
     titles: list = None,
+    references: list = None,
     count: int = 1,
     interval_minutes: int = 60,
     scheduled: bool = False,
@@ -125,23 +131,26 @@ def run_batch(
     여러 키워드/확정 제목 배치 작성
     keywords: 키워드 목록 (없으면 자동) - AI가 제목+본문 생성
     titles: AI 확정 제목 목록 - 제목 고정, 본문만 생성
+    references: titles와 같은 순서의 추가 참고자료 목록 (옵션, 유튜브 대본 등)
     scheduled: True면 interval_minutes 간격으로 예약 발행
     """
     settings = settings or {}
+    references = references or []
 
-    # 작업 목록 구성: {keyword, fixed_title}
+    # 작업 목록 구성: {keyword, fixed_title, reference}
     jobs = []
-    for t in (titles or []):
-        jobs.append({"keyword": None, "fixed_title": t})
+    for i, t in enumerate(titles or []):
+        reference = references[i] if i < len(references) else None
+        jobs.append({"keyword": None, "fixed_title": t, "reference": reference or None})
     if keywords:
         for kw in keywords:
-            jobs.append({"keyword": kw, "fixed_title": None})
+            jobs.append({"keyword": kw, "fixed_title": None, "reference": None})
     if not jobs:
         kws = get_fresh_keywords(count=count)
         if not kws:
             kws = [None] * count
         for kw in kws:
-            jobs.append({"keyword": kw, "fixed_title": None})
+            jobs.append({"keyword": kw, "fixed_title": None, "reference": None})
 
     # 예약 시작 기준 시간 파싱
     base_dt = None
@@ -169,6 +178,7 @@ def run_batch(
             fixed_title=job["fixed_title"],
             scheduled_at=sched_at,
             settings=settings,
+            extra_reference=job.get("reference"),
         )
         results.append(result)
 

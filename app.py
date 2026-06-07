@@ -54,6 +54,7 @@ def run_now():
     data = request.json or {}
     keywords = data.get("keywords", [])
     titles = data.get("titles", [])
+    references = data.get("references", [])
     manual = data.get("keyword", "").strip()
     if not keywords and not titles and manual:
         keywords = [manual]
@@ -66,7 +67,8 @@ def run_now():
     count = len(keywords) + len(titles) or 1
 
     def _run():
-        run_batch(keywords=keywords or None, titles=titles or None, count=count, scheduled=False, settings=settings)
+        run_batch(keywords=keywords or None, titles=titles or None, references=references or None,
+                  count=count, scheduled=False, settings=settings)
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
@@ -80,6 +82,7 @@ def run_scheduled():
     data = request.json or {}
     keywords = data.get("keywords", [])
     titles = data.get("titles", [])
+    references = data.get("references", [])
     interval = int(data.get("interval_minutes", 60))
     start_time = data.get("start_time", None)  # "2026-05-17T09:00" 형식
     count = len(keywords) + len(titles) or int(data.get("count", 1))
@@ -91,7 +94,7 @@ def run_scheduled():
     }
 
     def _run():
-        run_batch(keywords=keywords or None, titles=titles or None, count=count,
+        run_batch(keywords=keywords or None, titles=titles or None, references=references or None, count=count,
                   interval_minutes=interval, scheduled=True,
                   start_time=start_time, settings=settings)
 
@@ -210,6 +213,36 @@ def api_generate_titles():
         return jsonify({"error": str(e)}), 500
 
 
+# ─── 유튜브 리서치 (조회수 검색 / 제목·대본 추출) ───────
+
+@app.route("/api/youtube/search")
+def api_youtube_search():
+    keyword = request.args.get("keyword", "").strip()
+    video_type = request.args.get("type", "all")
+    if not keyword:
+        return jsonify({"error": "검색어를 입력해주세요."}), 400
+    try:
+        from modules.youtube_researcher import search_videos
+        videos = search_videos(keyword, video_type=video_type, max_results=25)
+        return jsonify({"success": True, "videos": videos})
+    except Exception as e:
+        add_log(f"유튜브 검색 오류: {e}", "ERROR")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/youtube/transcript")
+def api_youtube_transcript():
+    video_id = request.args.get("video_id", "").strip()
+    if not video_id:
+        return jsonify({"error": "영상 ID가 필요합니다."}), 400
+    try:
+        from modules.youtube_researcher import get_transcript
+        transcript = get_transcript(video_id)
+        return jsonify({"success": True, "transcript": transcript})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 # ─── 유명인 키워드 ────────────────────────────────────
 
 
@@ -236,6 +269,7 @@ def settings():
         "unsplash_key": "****" if get_api_key("unsplash") else "",
         "pexels_key": "****" if get_api_key("pexels") else "",
         "pixabay_key": "****" if get_api_key("pixabay") else "",
+        "youtube_key": "****" if get_api_key("youtube") else "",
         "naver_ad_customer_id": get_api_key("naver_ad_customer_id") or "",
         "naver_ad_license": "****" if get_api_key("naver_ad_license") else "",
         "naver_ad_secret": "****" if get_api_key("naver_ad_secret") else "",
@@ -264,6 +298,7 @@ def settings_save():
         "unsplash": data.get("unsplash_key", ""),
         "pexels": data.get("pexels_key", ""),
         "pixabay": data.get("pixabay_key", ""),
+        "youtube": data.get("youtube_key", ""),
         "naver_ad_customer_id": data.get("naver_ad_customer_id", ""),
         "naver_ad_license": data.get("naver_ad_license", ""),
         "naver_ad_secret": data.get("naver_ad_secret", ""),
@@ -377,6 +412,23 @@ def test_api():
                 results["pixabay"] = {"ok": False, "msg": "API 키 없음"}
         except Exception as e:
             results["pixabay"] = {"ok": False, "msg": str(e)}
+
+    if api_name in ("youtube", "all"):
+        try:
+            import requests as req
+            key = data.get("youtube_key") or get_api_key("youtube")
+            if key:
+                r = req.get(
+                    "https://www.googleapis.com/youtube/v3/search",
+                    params={"key": key, "q": "test", "part": "snippet", "type": "video", "maxResults": 1},
+                    timeout=5,
+                )
+                r.raise_for_status()
+                results["youtube"] = {"ok": True, "msg": "연결 성공"}
+            else:
+                results["youtube"] = {"ok": False, "msg": "API 키 없음"}
+        except Exception as e:
+            results["youtube"] = {"ok": False, "msg": str(e)}
 
     if api_name in ("naver", "all"):
         try:

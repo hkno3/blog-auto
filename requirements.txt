@@ -10,6 +10,7 @@ beautifulsoup4==4.12.3
 lxml==5.2.1
 python-dotenv==1.0.1
 pytrends==4.9.2
+youtube-transcript-api==0.6.2
 apscheduler==3.10.4
 cryptography==42.0.7
 Pillow==10.3.0

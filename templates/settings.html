@@ -90,6 +90,19 @@
       Google Sheets API 활성화 필요 (기존 Blogger 프로젝트에 추가 가능)
     </small>
   </div>
+
+  <div class="form-group">
+    <label>YouTube Data API Key <span class="optional">선택</span></label>
+    <div class="input-with-btn">
+      <input type="password" id="youtube_key" value="{{ config.youtube_key }}"
+             placeholder="AIza... (유튜브 영상 검색/대본 추출용)">
+      <button class="btn-secondary" onclick="testApi('youtube')">연결 테스트</button>
+    </div>
+    <div id="youtube-result" class="api-result"></div>
+    <small>
+      Google Cloud Console에서 YouTube Data API v3 활성화 후 API 키 발급 (기존 Blogger 프로젝트에 추가 가능)
+    </small>
+  </div>
 </div>
 
 <!-- 네이버 API 설정 -->
@@ -198,6 +211,7 @@ async function saveSettings() {
     unsplash_key: document.getElementById('unsplash_key').value,
     pexels_key: document.getElementById('pexels_key').value,
     pixabay_key: document.getElementById('pixabay_key').value,
+    youtube_key: document.getElementById('youtube_key').value,
     google_sheets_key: document.getElementById('google_sheets_key').value,
     naver_ad_customer_id: document.getElementById('naver_ad_customer_id').value,
     naver_ad_license: document.getElementById('naver_ad_license').value,
@@ -227,6 +241,7 @@ async function testApi(name) {
     gemini: ['gemini_key'],
     pexels: ['pexels_key'],
     pixabay: ['pixabay_key'],
+    youtube: ['youtube_key'],
     unsplash: ['unsplash_key'],
     google_sheets: ['google_sheets_key'],
     naver: ['naver_client_id', 'naver_client_secret'],
