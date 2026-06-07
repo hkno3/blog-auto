@@ -60,6 +60,8 @@ def _video_item(item: dict) -> dict:
         "video_type": v_type,
         "link": f"https://www.youtube.com/watch?v={video_id}",
         "thumbnail": snippet.get("thumbnails", {}).get("medium", {}).get("url", ""),
+        # YouTube가 보고하는 자막 보유 여부 (참고용 - 100% 정확하지 않을 수 있음)
+        "has_captions": item.get("contentDetails", {}).get("caption") == "true",
     }
 
 

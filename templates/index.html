@@ -707,13 +707,17 @@ function buildYtVideoCardsHtml(videos) {
           <div style="font-size:0.78em;color:#64748b;margin-top:3px;">
             👁 ${formatViewCount(v.view_count)} · ${v.channel} · ${v.duration_label} ·
             <span style="color:${v.video_type === 'shorts' ? '#db2777' : '#2563eb'};font-weight:600;">${v.video_type === 'shorts' ? '쇼츠' : '롱폼'}</span>
+            ${v.has_captions
+              ? '<span style="color:#16a34a;font-weight:600;"> · CC 자막 있음</span>'
+              : '<span style="color:#cbd5e1;"> · 자막 정보 없음</span>'}
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0;">
           <button onclick='copyAndUseTitle(${JSON.stringify(v.title)})'
                   style="background:#e9d5ff;color:#7c3aed;border:none;border-radius:5px;padding:4px 10px;font-size:0.75em;cursor:pointer;white-space:nowrap;">제목만 사용</button>
           <button onclick='openYtTranscriptModal(${JSON.stringify(v.video_id)}, ${JSON.stringify(v.title)})'
-                  style="background:#7c3aed;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:0.75em;cursor:pointer;white-space:nowrap;">대본 보기</button>
+                  ${v.has_captions ? '' : 'title="YouTube가 자막 보유로 보고하지 않은 영상입니다. 시도는 가능하지만 대본이 없을 수 있습니다."'}
+                  style="background:${v.has_captions ? '#7c3aed' : '#cbd5e1'};color:${v.has_captions ? '#fff' : '#64748b'};border:none;border-radius:5px;padding:4px 10px;font-size:0.75em;cursor:pointer;white-space:nowrap;">대본 보기${v.has_captions ? '' : ' (자막 없을 수 있음)'}</button>
         </div>
       </div>`).join('');
 }
