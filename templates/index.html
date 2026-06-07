@@ -130,15 +130,37 @@
 
   <!-- 유튜브 영상 리서치 -->
   <div class="form-group">
-    <label>🎬 유튜브 영상 리서치 <span style="font-size:0.8em;color:#94a3b8;">조회수순 검색 → 제목/대본 추출 → AI 제목 대기열에 추가</span></label>
+    <label>🎬 유튜브 영상 리서치 <span style="font-size:0.8em;color:#94a3b8;">검색 → 필터링 → 제목/대본 추출 → AI 제목 대기열에 추가</span></label>
     <div class="input-with-btn">
-      <input type="text" id="yt-keyword" placeholder="검색 키워드 입력 (예: 다이어트 운동)">
+      <input type="text" id="yt-keyword" placeholder="검색 키워드 입력 (예: 다이어트 운동)" onkeydown="if(event.key==='Enter') searchYoutube()">
       <select id="yt-type" style="padding:8px;border:1px solid #d1d5db;border-radius:6px;">
         <option value="all">전체</option>
         <option value="shorts">쇼츠 (60초 이하)</option>
         <option value="long">롱폼</option>
       </select>
       <button class="btn-secondary" onclick="searchYoutube()">검색</button>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;font-size:0.82em;">
+      <select id="yt-period" onchange="searchYoutube()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;">
+        <option value="all">업로드 기간: 전체</option>
+        <option value="24h">최근 1일</option>
+        <option value="7d">최근 1주일</option>
+        <option value="30d">최근 1개월</option>
+        <option value="90d">최근 3개월</option>
+      </select>
+      <select id="yt-min-views" onchange="searchYoutube()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;">
+        <option value="0">최소 조회수: 전체</option>
+        <option value="10000">1만 이상</option>
+        <option value="100000">10만 이상</option>
+        <option value="1000000">100만 이상</option>
+      </select>
+      <select id="yt-sort" onchange="searchYoutube()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;">
+        <option value="views">정렬: 조회수순</option>
+        <option value="recent">정렬: 최신 업로드순</option>
+      </select>
+      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;color:#64748b;">
+        <input type="checkbox" id="yt-captions-only" onchange="searchYoutube()"> 자막(CC) 보유 영상만
+      </label>
     </div>
     <div id="yt-result-list" style="margin-top:10px;"></div>
   </div>
@@ -153,13 +175,35 @@
         {% endfor %}
       </div>
       <div style="display:flex;align-items:center;gap:6px;">
-        <select id="yt-trending-type" onchange="reloadYtTrending()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:0.85em;">
-          <option value="all">전체</option>
-          <option value="shorts">쇼츠</option>
-          <option value="long">롱폼</option>
-        </select>
         <button class="btn-secondary" onclick="reloadYtTrending()" style="font-size:0.8em;padding:6px 10px;">새로고침</button>
       </div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0;font-size:0.82em;">
+      <select id="yt-trending-type" onchange="reloadYtTrending()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;">
+        <option value="all">전체</option>
+        <option value="shorts">쇼츠</option>
+        <option value="long">롱폼</option>
+      </select>
+      <select id="yt-trending-period" onchange="reloadYtTrending()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;">
+        <option value="all">업로드 기간: 전체</option>
+        <option value="24h">최근 1일</option>
+        <option value="7d">최근 1주일</option>
+        <option value="30d">최근 1개월</option>
+        <option value="90d">최근 3개월</option>
+      </select>
+      <select id="yt-trending-min-views" onchange="reloadYtTrending()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;">
+        <option value="0">최소 조회수: 전체</option>
+        <option value="10000">1만 이상</option>
+        <option value="100000">10만 이상</option>
+        <option value="1000000">100만 이상</option>
+      </select>
+      <select id="yt-trending-sort" onchange="reloadYtTrending()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;">
+        <option value="views">정렬: 조회수순</option>
+        <option value="recent">정렬: 최신 업로드순</option>
+      </select>
+      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;color:#64748b;">
+        <input type="checkbox" id="yt-trending-captions-only" onchange="reloadYtTrending()"> 자막(CC) 보유 영상만
+      </label>
     </div>
     <div id="yt-trending-panels" style="margin-top:0;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;display:none;">
       {% for region in ['한국','일본','중국','미국','영국','인도','베트남','동남아'] %}
@@ -722,6 +766,14 @@ function buildYtVideoCardsHtml(videos) {
       </div>`).join('');
 }
 
+function getYtFilterParams(prefix) {
+  const period = document.getElementById(`${prefix}-period`).value;
+  const minViews = document.getElementById(`${prefix}-min-views`).value;
+  const sort = document.getElementById(`${prefix}-sort`).value;
+  const captionsOnly = document.getElementById(`${prefix}-captions-only`).checked;
+  return `&period=${period}&min_views=${minViews}&sort=${sort}&captions_only=${captionsOnly}`;
+}
+
 async function searchYoutube() {
   const keyword = document.getElementById('yt-keyword').value.trim();
   const type = document.getElementById('yt-type').value;
@@ -733,7 +785,7 @@ async function searchYoutube() {
   list.innerHTML = '<div style="padding:14px;color:#64748b;font-size:0.9em;">검색 중... (잠시만 기다려주세요)</div>';
 
   try {
-    const res = await fetch(`/api/youtube/search?keyword=${encodeURIComponent(keyword)}&type=${type}`);
+    const res = await fetch(`/api/youtube/search?keyword=${encodeURIComponent(keyword)}&type=${type}${getYtFilterParams('yt')}`);
     const data = await res.json();
     if (!data.success) {
       list.innerHTML = `<div style="padding:14px;color:#ef4444;">오류: ${data.error}</div>`;
@@ -767,14 +819,15 @@ async function switchYtRegion(region) {
 async function loadYtTrending(region, forceReload) {
   const panel = document.getElementById(`yt-region-panel-${region}`);
   const type = document.getElementById('yt-trending-type').value;
-  const cacheKey = `${region}:${type}`;
+  const filterParams = getYtFilterParams('yt-trending');
+  const cacheKey = `${region}:${type}:${filterParams}`;
   if (ytTrendingLoaded[cacheKey] && !forceReload) {
     panel.innerHTML = ytTrendingLoaded[cacheKey];
     return;
   }
   panel.innerHTML = '<div style="padding:14px;color:#64748b;font-size:0.9em;">불러오는 중... (잠시만 기다려주세요)</div>';
   try {
-    const res = await fetch(`/api/youtube/trending?region=${encodeURIComponent(region)}&type=${type}`);
+    const res = await fetch(`/api/youtube/trending?region=${encodeURIComponent(region)}&type=${type}${filterParams}`);
     const data = await res.json();
     if (!data.success) {
       panel.innerHTML = `<div style="padding:14px;color:#ef4444;">오류: ${data.error}</div>`;

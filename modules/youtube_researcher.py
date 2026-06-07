@@ -4,6 +4,8 @@
 - 영상 제목 추출
 - 자막(대본) 추출
 """
+from datetime import datetime, timedelta, timezone
+
 import requests
 from config import get_api_key
 from database.db import add_log
@@ -11,6 +13,14 @@ from database.db import add_log
 SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
 SHORTS_MAX_SECONDS = 60
+
+# 업로드 기간 필터 - 키: 검색 시점 기준 거슬러 올라갈 기간
+PERIOD_DELTAS = {
+    "24h": timedelta(days=1),
+    "7d": timedelta(days=7),
+    "30d": timedelta(days=30),
+    "90d": timedelta(days=90),
+}
 
 # 국가별 인기 영상 탭 - 키: (region 표시명, YouTube regionCode 목록)
 TRENDING_REGIONS = {
@@ -54,6 +64,7 @@ def _video_item(item: dict) -> dict:
         "video_id": video_id,
         "title": snippet.get("title", ""),
         "channel": snippet.get("channelTitle", ""),
+        "published_at": snippet.get("publishedAt", ""),
         "view_count": int(stats.get("viewCount", 0)),
         "duration_seconds": duration_seconds,
         "duration_label": _format_duration(duration_seconds),
@@ -65,7 +76,42 @@ def _video_item(item: dict) -> dict:
     }
 
 
-def search_videos(keyword: str, video_type: str = "all", max_results: int = 25) -> list[dict]:
+def _period_cutoff(period: str):
+    """period 키 -> UTC 기준 cutoff datetime (없거나 'all'이면 None)"""
+    delta = PERIOD_DELTAS.get(period)
+    if not delta:
+        return None
+    return datetime.now(timezone.utc) - delta
+
+
+def _filter_and_sort(videos: list[dict], period: str = "all", min_views: int = 0,
+                     captions_only: bool = False, sort: str = "views") -> list[dict]:
+    cutoff = _period_cutoff(period)
+    filtered = []
+    for v in videos:
+        if min_views and v["view_count"] < min_views:
+            continue
+        if captions_only and not v.get("has_captions"):
+            continue
+        if cutoff is not None:
+            try:
+                published = datetime.fromisoformat(v["published_at"].replace("Z", "+00:00"))
+            except Exception:
+                published = None
+            if published is None or published < cutoff:
+                continue
+        filtered.append(v)
+
+    if sort == "recent":
+        filtered.sort(key=lambda v: v.get("published_at", ""), reverse=True)
+    else:
+        filtered.sort(key=lambda v: v["view_count"], reverse=True)
+    return filtered
+
+
+def search_videos(keyword: str, video_type: str = "all", max_results: int = 25,
+                  period: str = "all", min_views: int = 0, captions_only: bool = False,
+                  sort: str = "views") -> list[dict]:
     """
     키워드로 유튜브 영상 검색 후 조회수 내림차순 정렬
     video_type: "all" | "shorts" | "long"
@@ -81,17 +127,18 @@ def search_videos(keyword: str, video_type: str = "all", max_results: int = 25) 
     try:
         # order=viewCount는 YouTube API 특성상 후보군이 매우 좁아 결과가 몇 개 안 나오는 경우가 많음.
         # relevance(기본값)로 넓게 가져온 뒤 실제 조회수로 재정렬한다.
-        search_resp = requests.get(
-            SEARCH_URL,
-            params={
-                "key": api_key,
-                "q": keyword,
-                "part": "snippet",
-                "type": "video",
-                "maxResults": 50,
-            },
-            timeout=10,
-        )
+        search_params = {
+            "key": api_key,
+            "q": keyword,
+            "part": "snippet",
+            "type": "video",
+            "maxResults": 50,
+        }
+        cutoff = _period_cutoff(period)
+        if cutoff is not None:
+            search_params["publishedAfter"] = cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        search_resp = requests.get(SEARCH_URL, params=search_params, timeout=10)
         search_resp.raise_for_status()
         items = search_resp.json().get("items", [])
         video_ids = [item["id"]["videoId"] for item in items if item.get("id", {}).get("videoId")]
@@ -115,7 +162,9 @@ def search_videos(keyword: str, video_type: str = "all", max_results: int = 25) 
                 continue
             results.append(video)
 
-        results.sort(key=lambda v: v["view_count"], reverse=True)
+        # publishedAfter는 search.list에서 이미 적용했으므로 period는 다시 거르지 않음
+        results = _filter_and_sort(results, period="all", min_views=min_views,
+                                   captions_only=captions_only, sort=sort)
         return results[:max_results]
 
     except Exception as e:
@@ -123,10 +172,13 @@ def search_videos(keyword: str, video_type: str = "all", max_results: int = 25) 
         raise
 
 
-def get_trending_videos(region: str, video_type: str = "all", max_results: int = 25) -> list[dict]:
+def get_trending_videos(region: str, video_type: str = "all", max_results: int = 25,
+                        period: str = "all", min_views: int = 0, captions_only: bool = False,
+                        sort: str = "views") -> list[dict]:
     """
     국가별 인기 급상승 영상 조회 (현재 조회수 많은 = 사람들이 많이 찾는 주제 발굴용)
     region: TRENDING_REGIONS의 키 (예: "한국", "동남아")
+    chart=mostPopular는 publishedAfter를 지원하지 않아 period는 결과를 받은 뒤 직접 거른다.
     """
     api_key = get_api_key("youtube")
     if not api_key:
@@ -161,7 +213,8 @@ def get_trending_videos(region: str, video_type: str = "all", max_results: int =
                 seen_ids.add(video["video_id"])
                 results.append(video)
 
-        results.sort(key=lambda v: v["view_count"], reverse=True)
+        results = _filter_and_sort(results, period=period, min_views=min_views,
+                                   captions_only=captions_only, sort=sort)
         return results[:max_results]
 
     except Exception as e:

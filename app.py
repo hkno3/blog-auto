@@ -219,11 +219,17 @@ def api_generate_titles():
 def api_youtube_search():
     keyword = request.args.get("keyword", "").strip()
     video_type = request.args.get("type", "all")
+    period = request.args.get("period", "all")
+    min_views = int(request.args.get("min_views", 0) or 0)
+    captions_only = request.args.get("captions_only", "false") == "true"
+    sort = request.args.get("sort", "views")
     if not keyword:
         return jsonify({"error": "검색어를 입력해주세요."}), 400
     try:
         from modules.youtube_researcher import search_videos
-        videos = search_videos(keyword, video_type=video_type, max_results=25)
+        videos = search_videos(keyword, video_type=video_type, max_results=25,
+                               period=period, min_views=min_views,
+                               captions_only=captions_only, sort=sort)
         return jsonify({"success": True, "videos": videos})
     except Exception as e:
         add_log(f"유튜브 검색 오류: {e}", "ERROR")
@@ -253,11 +259,17 @@ def api_youtube_regions():
 def api_youtube_trending():
     region = request.args.get("region", "").strip()
     video_type = request.args.get("type", "all")
+    period = request.args.get("period", "all")
+    min_views = int(request.args.get("min_views", 0) or 0)
+    captions_only = request.args.get("captions_only", "false") == "true"
+    sort = request.args.get("sort", "views")
     if not region:
         return jsonify({"error": "지역을 선택해주세요."}), 400
     try:
         from modules.youtube_researcher import get_trending_videos
-        videos = get_trending_videos(region, video_type=video_type, max_results=25)
+        videos = get_trending_videos(region, video_type=video_type, max_results=25,
+                                     period=period, min_views=min_views,
+                                     captions_only=captions_only, sort=sort)
         return jsonify({"success": True, "region": region, "videos": videos})
     except Exception as e:
         add_log(f"유튜브 인기 영상 조회 오류: {e}", "ERROR")
