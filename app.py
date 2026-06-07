@@ -222,15 +222,17 @@ def api_youtube_search():
     period = request.args.get("period", "all")
     min_views = int(request.args.get("min_views", 0) or 0)
     captions_only = request.args.get("captions_only", "false") == "true"
+    exclude_music = request.args.get("exclude_music", "false") == "true"
     sort = request.args.get("sort", "views")
+    page_token = request.args.get("page_token") or None
     if not keyword:
         return jsonify({"error": "검색어를 입력해주세요."}), 400
     try:
         from modules.youtube_researcher import search_videos
-        videos = search_videos(keyword, video_type=video_type, max_results=50,
-                               period=period, min_views=min_views,
-                               captions_only=captions_only, sort=sort)
-        return jsonify({"success": True, "videos": videos})
+        result = search_videos(keyword, video_type=video_type, period=period, min_views=min_views,
+                               captions_only=captions_only, exclude_music=exclude_music, sort=sort,
+                               page_token=page_token)
+        return jsonify({"success": True, "videos": result["videos"], "next_page_token": result["next_page_token"]})
     except Exception as e:
         add_log(f"유튜브 검색 오류: {e}", "ERROR")
         return jsonify({"success": False, "error": str(e)}), 500
@@ -262,15 +264,18 @@ def api_youtube_trending():
     period = request.args.get("period", "all")
     min_views = int(request.args.get("min_views", 0) or 0)
     captions_only = request.args.get("captions_only", "false") == "true"
+    exclude_music = request.args.get("exclude_music", "false") == "true"
     sort = request.args.get("sort", "views")
+    page_token = request.args.get("page_token") or None
     if not region:
         return jsonify({"error": "지역을 선택해주세요."}), 400
     try:
         from modules.youtube_researcher import get_trending_videos
-        videos = get_trending_videos(region, video_type=video_type, max_results=50,
-                                     period=period, min_views=min_views,
-                                     captions_only=captions_only, sort=sort)
-        return jsonify({"success": True, "region": region, "videos": videos})
+        result = get_trending_videos(region, video_type=video_type, period=period, min_views=min_views,
+                                     captions_only=captions_only, exclude_music=exclude_music, sort=sort,
+                                     page_token=page_token)
+        return jsonify({"success": True, "region": region, "videos": result["videos"],
+                        "next_page_token": result["next_page_token"]})
     except Exception as e:
         add_log(f"유튜브 인기 영상 조회 오류: {e}", "ERROR")
         return jsonify({"success": False, "error": str(e)}), 500
