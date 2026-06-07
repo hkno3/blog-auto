@@ -34,6 +34,9 @@ TRENDING_REGIONS = {
     "동남아": ["TH", "ID"],
 }
 
+# YouTube videoCategoryId 기준 음악/엔터테인먼트 계열 (블로그 키워드 발굴 시 노이즈가 되는 경우가 많음)
+MUSIC_ENTERTAINMENT_CATEGORY_IDS = {"10", "24"}  # 10=Music, 24=Entertainment
+
 
 def _parse_duration_seconds(duration: str) -> int:
     """ISO 8601 duration (예: PT1M30S) -> 초 단위 정수"""
@@ -64,6 +67,7 @@ def _video_item(item: dict) -> dict:
         "video_id": video_id,
         "title": snippet.get("title", ""),
         "channel": snippet.get("channelTitle", ""),
+        "category_id": snippet.get("categoryId", ""),
         "published_at": snippet.get("publishedAt", ""),
         "view_count": int(stats.get("viewCount", 0)),
         "duration_seconds": duration_seconds,
@@ -85,13 +89,16 @@ def _period_cutoff(period: str):
 
 
 def _filter_and_sort(videos: list[dict], period: str = "all", min_views: int = 0,
-                     captions_only: bool = False, sort: str = "views") -> list[dict]:
+                     captions_only: bool = False, exclude_music: bool = False,
+                     sort: str = "views") -> list[dict]:
     cutoff = _period_cutoff(period)
     filtered = []
     for v in videos:
         if min_views and v["view_count"] < min_views:
             continue
         if captions_only and not v.get("has_captions"):
+            continue
+        if exclude_music and v.get("category_id") in MUSIC_ENTERTAINMENT_CATEGORY_IDS:
             continue
         if cutoff is not None:
             try:
@@ -109,20 +116,19 @@ def _filter_and_sort(videos: list[dict], period: str = "all", min_views: int = 0
     return filtered
 
 
-def search_videos(keyword: str, video_type: str = "all", max_results: int = 25,
-                  period: str = "all", min_views: int = 0, captions_only: bool = False,
-                  sort: str = "views") -> list[dict]:
+def search_videos(keyword: str, video_type: str = "all", period: str = "all", min_views: int = 0,
+                  captions_only: bool = False, exclude_music: bool = False, sort: str = "views",
+                  page_token: str = None) -> dict:
     """
-    키워드로 유튜브 영상 검색 후 조회수 내림차순 정렬
+    키워드로 유튜브 영상 검색 (페이지당 최대 ~50개, 무한 스크롤용 page_token 지원)
     video_type: "all" | "shorts" | "long"
-    반환: [{video_id, title, channel, view_count, duration_seconds, duration_label,
-            video_type, link, thumbnail}]
+    반환: {"videos": [...], "next_page_token": str|None}
     """
     api_key = get_api_key("youtube")
     if not api_key:
         raise ValueError("유튜브 API 키가 설정되지 않았습니다.")
     if not keyword:
-        return []
+        return {"videos": [], "next_page_token": None}
 
     try:
         # order=viewCount는 YouTube API 특성상 후보군이 매우 좁아 결과가 몇 개 안 나오는 경우가 많음.
@@ -137,13 +143,17 @@ def search_videos(keyword: str, video_type: str = "all", max_results: int = 25,
         cutoff = _period_cutoff(period)
         if cutoff is not None:
             search_params["publishedAfter"] = cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
+        if page_token:
+            search_params["pageToken"] = page_token
 
         search_resp = requests.get(SEARCH_URL, params=search_params, timeout=10)
         search_resp.raise_for_status()
-        items = search_resp.json().get("items", [])
+        search_data = search_resp.json()
+        next_page_token = search_data.get("nextPageToken")
+        items = search_data.get("items", [])
         video_ids = [item["id"]["videoId"] for item in items if item.get("id", {}).get("videoId")]
         if not video_ids:
-            return []
+            return {"videos": [], "next_page_token": next_page_token}
 
         videos_resp = requests.get(
             VIDEOS_URL,
@@ -164,21 +174,22 @@ def search_videos(keyword: str, video_type: str = "all", max_results: int = 25,
 
         # publishedAfter는 search.list에서 이미 적용했으므로 period는 다시 거르지 않음
         results = _filter_and_sort(results, period="all", min_views=min_views,
-                                   captions_only=captions_only, sort=sort)
-        return results[:max_results]
+                                   captions_only=captions_only, exclude_music=exclude_music, sort=sort)
+        return {"videos": results, "next_page_token": next_page_token}
 
     except Exception as e:
         add_log(f"유튜브 검색 오류: {e}", "ERROR")
         raise
 
 
-def get_trending_videos(region: str, video_type: str = "all", max_results: int = 25,
-                        period: str = "all", min_views: int = 0, captions_only: bool = False,
-                        sort: str = "views") -> list[dict]:
+def get_trending_videos(region: str, video_type: str = "all", period: str = "all", min_views: int = 0,
+                        captions_only: bool = False, exclude_music: bool = False, sort: str = "views",
+                        page_token: str = None) -> dict:
     """
     국가별 인기 급상승 영상 조회 (현재 조회수 많은 = 사람들이 많이 찾는 주제 발굴용)
     region: TRENDING_REGIONS의 키 (예: "한국", "동남아")
     chart=mostPopular는 publishedAfter를 지원하지 않아 period는 결과를 받은 뒤 직접 거른다.
+    여러 지역코드를 합치는 region(예: 동남아)은 페이지네이션을 지원하지 않음(첫 페이지만 반환).
     """
     api_key = get_api_key("youtube")
     if not api_key:
@@ -191,20 +202,27 @@ def get_trending_videos(region: str, video_type: str = "all", max_results: int =
     try:
         seen_ids = set()
         results = []
+        next_page_token = None
+        multi_region = len(region_codes) > 1
+
         for code in region_codes:
-            resp = requests.get(
-                VIDEOS_URL,
-                params={
-                    "key": api_key,
-                    "chart": "mostPopular",
-                    "regionCode": code,
-                    "part": "snippet,statistics,contentDetails",
-                    "maxResults": min(max_results, 50),
-                },
-                timeout=10,
-            )
+            params = {
+                "key": api_key,
+                "chart": "mostPopular",
+                "regionCode": code,
+                "part": "snippet,statistics,contentDetails",
+                "maxResults": 50,
+            }
+            # 합산 지역(예: 동남아)은 페이지네이션을 지원하지 않고 첫 페이지만 사용
+            if not multi_region and page_token:
+                params["pageToken"] = page_token
+
+            resp = requests.get(VIDEOS_URL, params=params, timeout=10)
             resp.raise_for_status()
-            for item in resp.json().get("items", []):
+            data = resp.json()
+            if not multi_region:
+                next_page_token = data.get("nextPageToken")
+            for item in data.get("items", []):
                 video = _video_item(item)
                 if video["video_id"] in seen_ids:
                     continue
@@ -214,8 +232,8 @@ def get_trending_videos(region: str, video_type: str = "all", max_results: int =
                 results.append(video)
 
         results = _filter_and_sort(results, period=period, min_views=min_views,
-                                   captions_only=captions_only, sort=sort)
-        return results[:max_results]
+                                   captions_only=captions_only, exclude_music=exclude_music, sort=sort)
+        return {"videos": results, "next_page_token": next_page_token}
 
     except Exception as e:
         add_log(f"유튜브 인기 영상 조회 오류 ({region}): {e}", "ERROR")

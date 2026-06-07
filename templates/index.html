@@ -132,13 +132,13 @@
   <div class="form-group">
     <label>🎬 유튜브 영상 리서치 <span style="font-size:0.8em;color:#94a3b8;">검색 → 필터링 → 제목/대본 추출 → AI 제목 대기열에 추가</span></label>
     <div class="input-with-btn">
-      <input type="text" id="yt-keyword" placeholder="검색 키워드 입력 (예: 다이어트 운동)" onkeydown="if(event.key==='Enter') searchYoutube()">
-      <select id="yt-type" style="padding:8px;border:1px solid #d1d5db;border-radius:6px;">
+      <input type="text" id="yt-keyword" placeholder="검색 키워드 입력 (예: 다이어트 운동)" onkeydown="if(event.key==='Enter') searchYoutube()" style="flex:1;min-width:160px;">
+      <select id="yt-type" style="padding:8px;border:1px solid #d1d5db;border-radius:6px;flex-shrink:0;width:140px;">
         <option value="all">전체</option>
         <option value="shorts">쇼츠 (60초 이하)</option>
         <option value="long">롱폼</option>
       </select>
-      <button class="btn-secondary" onclick="searchYoutube()">검색</button>
+      <button class="btn-secondary" onclick="searchYoutube()" style="flex-shrink:0;">검색</button>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;font-size:0.82em;">
       <select id="yt-period" onchange="searchYoutube()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;">
@@ -161,8 +161,12 @@
       <label style="display:flex;align-items:center;gap:4px;cursor:pointer;color:#64748b;">
         <input type="checkbox" id="yt-captions-only" onchange="searchYoutube()"> 자막(CC) 보유 영상만
       </label>
+      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;color:#64748b;">
+        <input type="checkbox" id="yt-exclude-music" checked onchange="searchYoutube()"> 음악/엔터 영상 제외
+      </label>
     </div>
     <div id="yt-result-list" style="margin-top:10px;max-height:600px;overflow-y:auto;"></div>
+    <div id="yt-loading-more" style="display:none;text-align:center;padding:10px;color:#94a3b8;font-size:0.82em;">더 불러오는 중...</div>
   </div>
 
   <!-- 국가별 인기 영상 (현재 조회수 많은 = 사람들이 많이 찾는 주제 발굴) -->
@@ -203,6 +207,9 @@
       </select>
       <label style="display:flex;align-items:center;gap:4px;cursor:pointer;color:#64748b;">
         <input type="checkbox" id="yt-trending-captions-only" onchange="reloadYtTrending()"> 자막(CC) 보유 영상만
+      </label>
+      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;color:#64748b;">
+        <input type="checkbox" id="yt-trending-exclude-music" checked onchange="reloadYtTrending()"> 음악/엔터 영상 제외
       </label>
     </div>
     <div id="yt-trending-panels" style="margin-top:0;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;display:none;">
@@ -771,36 +778,85 @@ function getYtFilterParams(prefix) {
   const minViews = document.getElementById(`${prefix}-min-views`).value;
   const sort = document.getElementById(`${prefix}-sort`).value;
   const captionsOnly = document.getElementById(`${prefix}-captions-only`).checked;
-  return `&period=${period}&min_views=${minViews}&sort=${sort}&captions_only=${captionsOnly}`;
+  const excludeMusic = document.getElementById(`${prefix}-exclude-music`).checked;
+  return `&period=${period}&min_views=${minViews}&sort=${sort}&captions_only=${captionsOnly}&exclude_music=${excludeMusic}`;
 }
+
+function attachInfiniteScroll(container, onNearBottom) {
+  container.onscroll = () => {
+    if (container.scrollTop + container.clientHeight >= container.scrollHeight - 120) {
+      onNearBottom();
+    }
+  };
+}
+
+// ─── 키워드 검색 (무한 스크롤) ───────────────────────
+let ytSearchState = { videos: [], seenIds: new Set(), nextPageToken: null, loading: false, query: '' };
 
 async function searchYoutube() {
   const keyword = document.getElementById('yt-keyword').value.trim();
-  const type = document.getElementById('yt-type').value;
   const list = document.getElementById('yt-result-list');
   if (!keyword) {
     showToast('검색 키워드를 입력해주세요.');
     return;
   }
+  ytSearchState = { videos: [], seenIds: new Set(), nextPageToken: null, loading: false, query: keyword };
   list.innerHTML = '<div style="padding:14px;color:#64748b;font-size:0.9em;">검색 중... (잠시만 기다려주세요)</div>';
+  document.getElementById('yt-loading-more').style.display = 'none';
+  attachInfiniteScroll(list, loadMoreSearchResults);
+  await fetchYtSearchPage();
+}
+
+async function fetchYtSearchPage() {
+  if (ytSearchState.loading) return;
+  ytSearchState.loading = true;
+  const list = document.getElementById('yt-result-list');
+  const loadingMore = document.getElementById('yt-loading-more');
+  const isFirstPage = ytSearchState.videos.length === 0;
+  if (!isFirstPage) loadingMore.style.display = 'block';
 
   try {
-    const res = await fetch(`/api/youtube/search?keyword=${encodeURIComponent(keyword)}&type=${type}${getYtFilterParams('yt')}`);
+    const type = document.getElementById('yt-type').value;
+    const tokenParam = ytSearchState.nextPageToken ? `&page_token=${encodeURIComponent(ytSearchState.nextPageToken)}` : '';
+    const res = await fetch(`/api/youtube/search?keyword=${encodeURIComponent(ytSearchState.query)}&type=${type}${getYtFilterParams('yt')}${tokenParam}`);
     const data = await res.json();
     if (!data.success) {
-      list.innerHTML = `<div style="padding:14px;color:#ef4444;">오류: ${data.error}</div>`;
+      if (isFirstPage) list.innerHTML = `<div style="padding:14px;color:#ef4444;">오류: ${data.error}</div>`;
+      else showToast(`추가 로드 실패: ${data.error}`, 'error');
       return;
     }
-    list.innerHTML = buildYtVideoCardsHtml(data.videos);
+    data.videos.forEach(v => {
+      if (!ytSearchState.seenIds.has(v.video_id)) {
+        ytSearchState.seenIds.add(v.video_id);
+        ytSearchState.videos.push(v);
+      }
+    });
+    ytSearchState.nextPageToken = data.next_page_token || null;
+    list.innerHTML = buildYtVideoCardsHtml(ytSearchState.videos);
   } catch(e) {
-    list.innerHTML = `<div style="padding:14px;color:#ef4444;">오류: ${e.message}</div>`;
+    if (isFirstPage) list.innerHTML = `<div style="padding:14px;color:#ef4444;">오류: ${e.message}</div>`;
+    else showToast(`추가 로드 오류: ${e.message}`, 'error');
+  } finally {
+    ytSearchState.loading = false;
+    loadingMore.style.display = 'none';
   }
 }
 
-// ─── 국가별 인기 영상 ────────────────────────────────
+function loadMoreSearchResults() {
+  if (ytSearchState.nextPageToken && !ytSearchState.loading) {
+    fetchYtSearchPage();
+  }
+}
+
+// ─── 국가별 인기 영상 (탭별 무한 스크롤) ─────────────
 const YT_REGIONS = ['한국', '일본', '중국', '미국', '영국', '인도', '베트남', '동남아'];
-let ytTrendingLoaded = {};
+let ytTrendingState = {};
 let ytCurrentRegion = null;
+
+function ytTrendingFilterKey() {
+  const type = document.getElementById('yt-trending-type').value;
+  return `${type}${getYtFilterParams('yt-trending')}`;
+}
 
 async function switchYtRegion(region) {
   ytCurrentRegion = region;
@@ -818,26 +874,65 @@ async function switchYtRegion(region) {
 
 async function loadYtTrending(region, forceReload) {
   const panel = document.getElementById(`yt-region-panel-${region}`);
-  const type = document.getElementById('yt-trending-type').value;
-  const filterParams = getYtFilterParams('yt-trending');
-  const cacheKey = `${region}:${type}:${filterParams}`;
-  if (ytTrendingLoaded[cacheKey] && !forceReload) {
-    panel.innerHTML = ytTrendingLoaded[cacheKey];
+  const filterKey = ytTrendingFilterKey();
+  const cacheKey = `${region}:${filterKey}`;
+  const existing = ytTrendingState[cacheKey];
+
+  if (existing && !forceReload) {
+    panel.innerHTML = buildYtVideoCardsHtml(existing.videos);
+    attachInfiniteScroll(panel, () => loadMoreTrending(region));
     return;
   }
+
+  ytTrendingState[cacheKey] = { videos: [], seenIds: new Set(), nextPageToken: null, loading: false };
   panel.innerHTML = '<div style="padding:14px;color:#64748b;font-size:0.9em;">불러오는 중... (잠시만 기다려주세요)</div>';
+  attachInfiniteScroll(panel, () => loadMoreTrending(region));
+  await fetchYtTrendingPage(region);
+}
+
+async function fetchYtTrendingPage(region) {
+  const filterKey = ytTrendingFilterKey();
+  const cacheKey = `${region}:${filterKey}`;
+  const state = ytTrendingState[cacheKey];
+  if (!state || state.loading) return;
+  state.loading = true;
+
+  const panel = document.getElementById(`yt-region-panel-${region}`);
+  const isFirstPage = state.videos.length === 0;
+  const type = document.getElementById('yt-trending-type').value;
+
   try {
-    const res = await fetch(`/api/youtube/trending?region=${encodeURIComponent(region)}&type=${type}${filterParams}`);
+    const tokenParam = state.nextPageToken ? `&page_token=${encodeURIComponent(state.nextPageToken)}` : '';
+    const res = await fetch(`/api/youtube/trending?region=${encodeURIComponent(region)}&type=${type}${getYtFilterParams('yt-trending')}${tokenParam}`);
     const data = await res.json();
     if (!data.success) {
-      panel.innerHTML = `<div style="padding:14px;color:#ef4444;">오류: ${data.error}</div>`;
+      if (isFirstPage) panel.innerHTML = `<div style="padding:14px;color:#ef4444;">오류: ${data.error}</div>`;
+      else showToast(`추가 로드 실패: ${data.error}`, 'error');
       return;
     }
-    const html = buildYtVideoCardsHtml(data.videos);
-    ytTrendingLoaded[cacheKey] = html;
-    panel.innerHTML = html;
+    data.videos.forEach(v => {
+      if (!state.seenIds.has(v.video_id)) {
+        state.seenIds.add(v.video_id);
+        state.videos.push(v);
+      }
+    });
+    state.nextPageToken = data.next_page_token || null;
+    if (ytCurrentRegion === region) {
+      panel.innerHTML = buildYtVideoCardsHtml(state.videos);
+    }
   } catch(e) {
-    panel.innerHTML = `<div style="padding:14px;color:#ef4444;">오류: ${e.message}</div>`;
+    if (isFirstPage) panel.innerHTML = `<div style="padding:14px;color:#ef4444;">오류: ${e.message}</div>`;
+    else showToast(`추가 로드 오류: ${e.message}`, 'error');
+  } finally {
+    state.loading = false;
+  }
+}
+
+function loadMoreTrending(region) {
+  const cacheKey = `${region}:${ytTrendingFilterKey()}`;
+  const state = ytTrendingState[cacheKey];
+  if (state && state.nextPageToken && !state.loading) {
+    fetchYtTrendingPage(region);
   }
 }
 
