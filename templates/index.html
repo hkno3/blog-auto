@@ -132,13 +132,13 @@
   <div class="form-group">
     <label>🎬 유튜브 영상 리서치 <span style="font-size:0.8em;color:#94a3b8;">검색 → 필터링 → 제목/대본 추출 → AI 제목 대기열에 추가</span></label>
     <div class="input-with-btn">
-      <input type="text" id="yt-keyword" placeholder="검색 키워드 입력 (예: 다이어트 운동)" onkeydown="if(event.key==='Enter') searchYoutube()">
-      <select id="yt-type" style="padding:8px;border:1px solid #d1d5db;border-radius:6px;">
+      <input type="text" id="yt-keyword" placeholder="검색 키워드 입력 (예: 다이어트 운동)" onkeydown="if(event.key==='Enter') searchYoutube()" style="flex:1;min-width:160px;">
+      <select id="yt-type" style="padding:8px;border:1px solid #d1d5db;border-radius:6px;flex-shrink:0;width:140px;">
         <option value="all">전체</option>
         <option value="shorts">쇼츠 (60초 이하)</option>
         <option value="long">롱폼</option>
       </select>
-      <button class="btn-secondary" onclick="searchYoutube()">검색</button>
+      <button class="btn-secondary" onclick="searchYoutube()" style="flex-shrink:0;">검색</button>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;font-size:0.82em;">
       <select id="yt-period" onchange="searchYoutube()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;">
