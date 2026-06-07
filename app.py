@@ -227,7 +227,7 @@ def api_youtube_search():
         return jsonify({"error": "검색어를 입력해주세요."}), 400
     try:
         from modules.youtube_researcher import search_videos
-        videos = search_videos(keyword, video_type=video_type, max_results=25,
+        videos = search_videos(keyword, video_type=video_type, max_results=50,
                                period=period, min_views=min_views,
                                captions_only=captions_only, sort=sort)
         return jsonify({"success": True, "videos": videos})
@@ -267,7 +267,7 @@ def api_youtube_trending():
         return jsonify({"error": "지역을 선택해주세요."}), 400
     try:
         from modules.youtube_researcher import get_trending_videos
-        videos = get_trending_videos(region, video_type=video_type, max_results=25,
+        videos = get_trending_videos(region, video_type=video_type, max_results=50,
                                      period=period, min_views=min_views,
                                      captions_only=captions_only, sort=sort)
         return jsonify({"success": True, "region": region, "videos": videos})
