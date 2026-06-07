@@ -77,6 +77,8 @@ def search_videos(keyword: str, video_type: str = "all", max_results: int = 25) 
         return []
 
     try:
+        # order=viewCount는 YouTube API 특성상 후보군이 매우 좁아 결과가 몇 개 안 나오는 경우가 많음.
+        # relevance(기본값)로 넓게 가져온 뒤 실제 조회수로 재정렬한다.
         search_resp = requests.get(
             SEARCH_URL,
             params={
@@ -84,8 +86,7 @@ def search_videos(keyword: str, video_type: str = "all", max_results: int = 25) 
                 "q": keyword,
                 "part": "snippet",
                 "type": "video",
-                "maxResults": min(max_results, 50),
-                "order": "viewCount",
+                "maxResults": 50,
             },
             timeout=10,
         )
@@ -113,7 +114,7 @@ def search_videos(keyword: str, video_type: str = "all", max_results: int = 25) 
             results.append(video)
 
         results.sort(key=lambda v: v["view_count"], reverse=True)
-        return results
+        return results[:max_results]
 
     except Exception as e:
         add_log(f"유튜브 검색 오류: {e}", "ERROR")
