@@ -143,6 +143,31 @@
     <div id="yt-result-list" style="margin-top:10px;"></div>
   </div>
 
+  <!-- 국가별 인기 영상 (현재 조회수 많은 = 사람들이 많이 찾는 주제 발굴) -->
+  <div class="form-group">
+    <label>🌍 국가별 인기 영상 <span style="font-size:0.8em;color:#94a3b8;">탭 클릭 시 현재 인기 급상승 영상 로드 (블로그 주제 발굴용)</span></label>
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+      <div style="display:flex;flex-wrap:wrap;gap:0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+        {% for region in ['한국','일본','중국','미국','영국','인도','베트남','동남아'] %}
+        <button class="btn-tab yt-region-tab" data-region="{{ region }}" onclick="switchYtRegion('{{ region }}')">{{ region }}</button>
+        {% endfor %}
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <select id="yt-trending-type" onchange="reloadYtTrending()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:0.85em;">
+          <option value="all">전체</option>
+          <option value="shorts">쇼츠</option>
+          <option value="long">롱폼</option>
+        </select>
+        <button class="btn-secondary" onclick="reloadYtTrending()" style="font-size:0.8em;padding:6px 10px;">새로고침</button>
+      </div>
+    </div>
+    <div id="yt-trending-panels" style="margin-top:0;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;display:none;">
+      {% for region in ['한국','일본','중국','미국','영국','인도','베트남','동남아'] %}
+      <div id="yt-region-panel-{{ region }}" class="tab-panel yt-region-panel"></div>
+      {% endfor %}
+    </div>
+  </div>
+
   <!-- 유튜브 대본 모달 -->
   <div id="yt-transcript-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.5);z-index:1000;align-items:center;justify-content:center;">
     <div style="background:#fff;border-radius:10px;max-width:640px;width:90%;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;">
@@ -670,6 +695,29 @@ function formatViewCount(n) {
   return String(n);
 }
 
+function buildYtVideoCardsHtml(videos) {
+  if (videos.length === 0) {
+    return '<div style="padding:14px;color:#94a3b8;">검색 결과가 없습니다.</div>';
+  }
+  return videos.map(v => `
+      <div style="display:flex;gap:10px;align-items:center;padding:8px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;">
+        ${v.thumbnail ? `<img src="${v.thumbnail}" style="width:96px;height:54px;object-fit:cover;border-radius:5px;flex-shrink:0;">` : ''}
+        <div style="flex:1;min-width:0;">
+          <a href="${v.link}" target="_blank" style="font-size:0.88em;font-weight:600;color:#1e293b;text-decoration:none;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${v.title}</a>
+          <div style="font-size:0.78em;color:#64748b;margin-top:3px;">
+            👁 ${formatViewCount(v.view_count)} · ${v.channel} · ${v.duration_label} ·
+            <span style="color:${v.video_type === 'shorts' ? '#db2777' : '#2563eb'};font-weight:600;">${v.video_type === 'shorts' ? '쇼츠' : '롱폼'}</span>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0;">
+          <button onclick='copyAndUseTitle(${JSON.stringify(v.title)})'
+                  style="background:#e9d5ff;color:#7c3aed;border:none;border-radius:5px;padding:4px 10px;font-size:0.75em;cursor:pointer;white-space:nowrap;">제목만 사용</button>
+          <button onclick='openYtTranscriptModal(${JSON.stringify(v.video_id)}, ${JSON.stringify(v.title)})'
+                  style="background:#7c3aed;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:0.75em;cursor:pointer;white-space:nowrap;">대본 보기</button>
+        </div>
+      </div>`).join('');
+}
+
 async function searchYoutube() {
   const keyword = document.getElementById('yt-keyword').value.trim();
   const type = document.getElementById('yt-type').value;
@@ -687,30 +735,58 @@ async function searchYoutube() {
       list.innerHTML = `<div style="padding:14px;color:#ef4444;">오류: ${data.error}</div>`;
       return;
     }
-    if (data.videos.length === 0) {
-      list.innerHTML = '<div style="padding:14px;color:#94a3b8;">검색 결과가 없습니다.</div>';
-      return;
-    }
-    list.innerHTML = data.videos.map(v => `
-      <div style="display:flex;gap:10px;align-items:center;padding:8px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;">
-        ${v.thumbnail ? `<img src="${v.thumbnail}" style="width:96px;height:54px;object-fit:cover;border-radius:5px;flex-shrink:0;">` : ''}
-        <div style="flex:1;min-width:0;">
-          <a href="${v.link}" target="_blank" style="font-size:0.88em;font-weight:600;color:#1e293b;text-decoration:none;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${v.title}</a>
-          <div style="font-size:0.78em;color:#64748b;margin-top:3px;">
-            👁 ${formatViewCount(v.view_count)} · ${v.channel} · ${v.duration_label} ·
-            <span style="color:${v.video_type === 'shorts' ? '#db2777' : '#2563eb'};font-weight:600;">${v.video_type === 'shorts' ? '쇼츠' : '롱폼'}</span>
-          </div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0;">
-          <button onclick='copyAndUseTitle(${JSON.stringify(v.title)})'
-                  style="background:#e9d5ff;color:#7c3aed;border:none;border-radius:5px;padding:4px 10px;font-size:0.75em;cursor:pointer;white-space:nowrap;">제목만 사용</button>
-          <button onclick='openYtTranscriptModal(${JSON.stringify(v.video_id)}, ${JSON.stringify(v.title)})'
-                  style="background:#7c3aed;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:0.75em;cursor:pointer;white-space:nowrap;">대본 보기</button>
-        </div>
-      </div>`).join('');
+    list.innerHTML = buildYtVideoCardsHtml(data.videos);
   } catch(e) {
     list.innerHTML = `<div style="padding:14px;color:#ef4444;">오류: ${e.message}</div>`;
   }
+}
+
+// ─── 국가별 인기 영상 ────────────────────────────────
+const YT_REGIONS = ['한국', '일본', '중국', '미국', '영국', '인도', '베트남', '동남아'];
+let ytTrendingLoaded = {};
+let ytCurrentRegion = null;
+
+async function switchYtRegion(region) {
+  ytCurrentRegion = region;
+  document.querySelectorAll('.yt-region-tab').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.yt-region-tab[data-region="${region}"]`).classList.add('active');
+
+  const wrap = document.getElementById('yt-trending-panels');
+  wrap.style.display = 'block';
+  document.querySelectorAll('.yt-region-panel').forEach(p => p.classList.remove('active'));
+  const panel = document.getElementById(`yt-region-panel-${region}`);
+  panel.classList.add('active');
+
+  await loadYtTrending(region, false);
+}
+
+async function loadYtTrending(region, forceReload) {
+  const panel = document.getElementById(`yt-region-panel-${region}`);
+  const type = document.getElementById('yt-trending-type').value;
+  const cacheKey = `${region}:${type}`;
+  if (ytTrendingLoaded[cacheKey] && !forceReload) {
+    panel.innerHTML = ytTrendingLoaded[cacheKey];
+    return;
+  }
+  panel.innerHTML = '<div style="padding:14px;color:#64748b;font-size:0.9em;">불러오는 중... (잠시만 기다려주세요)</div>';
+  try {
+    const res = await fetch(`/api/youtube/trending?region=${encodeURIComponent(region)}&type=${type}`);
+    const data = await res.json();
+    if (!data.success) {
+      panel.innerHTML = `<div style="padding:14px;color:#ef4444;">오류: ${data.error}</div>`;
+      return;
+    }
+    const html = buildYtVideoCardsHtml(data.videos);
+    ytTrendingLoaded[cacheKey] = html;
+    panel.innerHTML = html;
+  } catch(e) {
+    panel.innerHTML = `<div style="padding:14px;color:#ef4444;">오류: ${e.message}</div>`;
+  }
+}
+
+function reloadYtTrending() {
+  ytTrendingLoaded = {};
+  if (ytCurrentRegion) loadYtTrending(ytCurrentRegion, true);
 }
 
 async function openYtTranscriptModal(videoId, title) {
