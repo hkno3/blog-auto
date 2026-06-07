@@ -243,6 +243,27 @@ def api_youtube_transcript():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route("/api/youtube/regions")
+def api_youtube_regions():
+    from modules.youtube_researcher import TRENDING_REGIONS
+    return jsonify({"regions": list(TRENDING_REGIONS.keys())})
+
+
+@app.route("/api/youtube/trending")
+def api_youtube_trending():
+    region = request.args.get("region", "").strip()
+    video_type = request.args.get("type", "all")
+    if not region:
+        return jsonify({"error": "지역을 선택해주세요."}), 400
+    try:
+        from modules.youtube_researcher import get_trending_videos
+        videos = get_trending_videos(region, video_type=video_type, max_results=25)
+        return jsonify({"success": True, "region": region, "videos": videos})
+    except Exception as e:
+        add_log(f"유튜브 인기 영상 조회 오류: {e}", "ERROR")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 # ─── 유명인 키워드 ────────────────────────────────────
 
 
