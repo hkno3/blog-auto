@@ -53,9 +53,6 @@ CATEGORY_NAMES = {
     "29": "비영리/사회운동",
 }
 
-# 기본적으로 제외 추천하는 카테고리 (블로그 키워드 발굴 시 노이즈가 되는 경우가 많음)
-DEFAULT_EXCLUDE_CATEGORY_IDS = {"10", "24"}  # 10=Music, 24=Entertainment
-
 
 def _parse_duration_seconds(duration: str) -> int:
     """ISO 8601 duration (예: PT1M30S) -> 초 단위 정수"""
@@ -109,17 +106,17 @@ def _period_cutoff(period: str):
 
 
 def _filter_and_sort(videos: list[dict], period: str = "all", min_views: int = 0,
-                     captions_only: bool = False, exclude_categories: set = None,
+                     captions_only: bool = False, include_categories: set = None,
                      sort: str = "views") -> list[dict]:
     cutoff = _period_cutoff(period)
-    exclude_categories = exclude_categories or set()
+    include_categories = include_categories or set()
     filtered = []
     for v in videos:
         if min_views and v["view_count"] < min_views:
             continue
         if captions_only and not v.get("has_captions"):
             continue
-        if exclude_categories and v.get("category_id") in exclude_categories:
+        if include_categories and v.get("category_id") not in include_categories:
             continue
         if cutoff is not None:
             try:
@@ -138,7 +135,7 @@ def _filter_and_sort(videos: list[dict], period: str = "all", min_views: int = 0
 
 
 def search_videos(keyword: str, video_type: str = "all", period: str = "all", min_views: int = 0,
-                  captions_only: bool = False, exclude_categories: set = None, sort: str = "views",
+                  captions_only: bool = False, include_categories: set = None, sort: str = "views",
                   page_token: str = None) -> dict:
     """
     키워드로 유튜브 영상 검색 (페이지당 최대 ~50개, 무한 스크롤용 page_token 지원)
@@ -195,7 +192,7 @@ def search_videos(keyword: str, video_type: str = "all", period: str = "all", mi
 
         # publishedAfter는 search.list에서 이미 적용했으므로 period는 다시 거르지 않음
         results = _filter_and_sort(results, period="all", min_views=min_views,
-                                   captions_only=captions_only, exclude_categories=exclude_categories, sort=sort)
+                                   captions_only=captions_only, include_categories=include_categories, sort=sort)
         return {"videos": results, "next_page_token": next_page_token}
 
     except Exception as e:
@@ -204,7 +201,7 @@ def search_videos(keyword: str, video_type: str = "all", period: str = "all", mi
 
 
 def get_trending_videos(region: str, video_type: str = "all", period: str = "all", min_views: int = 0,
-                        captions_only: bool = False, exclude_categories: set = None, sort: str = "views",
+                        captions_only: bool = False, include_categories: set = None, sort: str = "views",
                         page_token: str = None) -> dict:
     """
     국가별 인기 급상승 영상 조회 (현재 조회수 많은 = 사람들이 많이 찾는 주제 발굴용)
@@ -253,7 +250,7 @@ def get_trending_videos(region: str, video_type: str = "all", period: str = "all
                 results.append(video)
 
         results = _filter_and_sort(results, period=period, min_views=min_views,
-                                   captions_only=captions_only, exclude_categories=exclude_categories, sort=sort)
+                                   captions_only=captions_only, include_categories=include_categories, sort=sort)
         return {"videos": results, "next_page_token": next_page_token}
 
     except Exception as e:
