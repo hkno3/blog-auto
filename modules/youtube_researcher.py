@@ -34,8 +34,24 @@ TRENDING_REGIONS = {
     "동남아": ["TH", "ID"],
 }
 
-# YouTube videoCategoryId 기준 음악/엔터테인먼트 계열 (블로그 키워드 발굴 시 노이즈가 되는 경우가 많음)
-MUSIC_ENTERTAINMENT_CATEGORY_IDS = {"10", "24"}  # 10=Music, 24=Entertainment
+# YouTube videoCategoryId -> 한국 기준 카테고리명 (videoCategories.list regionCode=KR 기준 15개)
+CATEGORY_NAMES = {
+    "1": "영화/애니메이션",
+    "2": "자동차/교통",
+    "10": "음악",
+    "15": "반려동물/동물",
+    "17": "스포츠",
+    "19": "여행/이벤트",
+    "20": "게임",
+    "22": "인물/블로그",
+    "23": "코미디",
+    "24": "엔터테인먼트",
+    "25": "뉴스/정치",
+    "26": "노하우/스타일",
+    "27": "교육",
+    "28": "과학기술",
+    "29": "비영리/사회운동",
+}
 
 
 def _parse_duration_seconds(duration: str) -> int:
@@ -68,6 +84,7 @@ def _video_item(item: dict) -> dict:
         "title": snippet.get("title", ""),
         "channel": snippet.get("channelTitle", ""),
         "category_id": snippet.get("categoryId", ""),
+        "category_name": CATEGORY_NAMES.get(snippet.get("categoryId", ""), ""),
         "published_at": snippet.get("publishedAt", ""),
         "view_count": int(stats.get("viewCount", 0)),
         "duration_seconds": duration_seconds,
@@ -89,7 +106,7 @@ def _period_cutoff(period: str):
 
 
 def _filter_and_sort(videos: list[dict], period: str = "all", min_views: int = 0,
-                     captions_only: bool = False, exclude_music: bool = False,
+                     captions_only: bool = False, category: str = "",
                      sort: str = "views") -> list[dict]:
     cutoff = _period_cutoff(period)
     filtered = []
@@ -98,7 +115,7 @@ def _filter_and_sort(videos: list[dict], period: str = "all", min_views: int = 0
             continue
         if captions_only and not v.get("has_captions"):
             continue
-        if exclude_music and v.get("category_id") in MUSIC_ENTERTAINMENT_CATEGORY_IDS:
+        if category and v.get("category_id") != category:
             continue
         if cutoff is not None:
             try:
@@ -117,7 +134,7 @@ def _filter_and_sort(videos: list[dict], period: str = "all", min_views: int = 0
 
 
 def search_videos(keyword: str, video_type: str = "all", period: str = "all", min_views: int = 0,
-                  captions_only: bool = False, exclude_music: bool = False, sort: str = "views",
+                  captions_only: bool = False, category: str = "", sort: str = "views",
                   page_token: str = None) -> dict:
     """
     키워드로 유튜브 영상 검색 (페이지당 최대 ~50개, 무한 스크롤용 page_token 지원)
@@ -174,7 +191,7 @@ def search_videos(keyword: str, video_type: str = "all", period: str = "all", mi
 
         # publishedAfter는 search.list에서 이미 적용했으므로 period는 다시 거르지 않음
         results = _filter_and_sort(results, period="all", min_views=min_views,
-                                   captions_only=captions_only, exclude_music=exclude_music, sort=sort)
+                                   captions_only=captions_only, category=category, sort=sort)
         return {"videos": results, "next_page_token": next_page_token}
 
     except Exception as e:
@@ -183,7 +200,7 @@ def search_videos(keyword: str, video_type: str = "all", period: str = "all", mi
 
 
 def get_trending_videos(region: str, video_type: str = "all", period: str = "all", min_views: int = 0,
-                        captions_only: bool = False, exclude_music: bool = False, sort: str = "views",
+                        captions_only: bool = False, category: str = "", sort: str = "views",
                         page_token: str = None) -> dict:
     """
     국가별 인기 급상승 영상 조회 (현재 조회수 많은 = 사람들이 많이 찾는 주제 발굴용)
@@ -232,7 +249,7 @@ def get_trending_videos(region: str, video_type: str = "all", period: str = "all
                 results.append(video)
 
         results = _filter_and_sort(results, period=period, min_views=min_views,
-                                   captions_only=captions_only, exclude_music=exclude_music, sort=sort)
+                                   captions_only=captions_only, category=category, sort=sort)
         return {"videos": results, "next_page_token": next_page_token}
 
     except Exception as e:

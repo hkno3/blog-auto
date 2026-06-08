@@ -158,11 +158,14 @@
         <option value="views">정렬: 조회수순</option>
         <option value="recent">정렬: 최신 업로드순</option>
       </select>
+      <select id="yt-category" onchange="searchYoutube()" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:1.05em;width:auto;flex-shrink:0;">
+        <option value="">카테고리: 전체</option>
+        {% for cid, cname in yt_categories.items() %}
+        <option value="{{ cid }}">{{ cname }}</option>
+        {% endfor %}
+      </select>
       <label style="display:flex;align-items:center;gap:3px;cursor:pointer;color:#64748b;white-space:nowrap;">
         <input type="checkbox" id="yt-captions-only" onchange="searchYoutube()"> 자막(CC) 보유 영상만
-      </label>
-      <label style="display:flex;align-items:center;gap:3px;cursor:pointer;color:#64748b;white-space:nowrap;">
-        <input type="checkbox" id="yt-exclude-music" checked onchange="searchYoutube()"> 음악/엔터 영상 제외
       </label>
     </div>
     <div id="yt-result-list" style="margin-top:10px;max-height:600px;overflow-y:auto;"></div>
@@ -205,11 +208,14 @@
         <option value="views">정렬: 조회수순</option>
         <option value="recent">정렬: 최신 업로드순</option>
       </select>
+      <select id="yt-trending-category" onchange="reloadYtTrending()" style="padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:1.05em;width:auto;flex-shrink:0;">
+        <option value="">카테고리: 전체</option>
+        {% for cid, cname in yt_categories.items() %}
+        <option value="{{ cid }}">{{ cname }}</option>
+        {% endfor %}
+      </select>
       <label style="display:flex;align-items:center;gap:3px;cursor:pointer;color:#64748b;white-space:nowrap;">
         <input type="checkbox" id="yt-trending-captions-only" onchange="reloadYtTrending()"> 자막(CC) 보유 영상만
-      </label>
-      <label style="display:flex;align-items:center;gap:3px;cursor:pointer;color:#64748b;white-space:nowrap;">
-        <input type="checkbox" id="yt-trending-exclude-music" checked onchange="reloadYtTrending()"> 음악/엔터 영상 제외
       </label>
     </div>
     <div id="yt-trending-panels" style="margin-top:0;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;display:none;">
@@ -758,6 +764,7 @@ function buildYtVideoCardsHtml(videos) {
           <div style="font-size:0.78em;color:#64748b;margin-top:3px;">
             👁 ${formatViewCount(v.view_count)} · ${v.channel} · ${v.duration_label} ·
             <span style="color:${v.video_type === 'shorts' ? '#db2777' : '#2563eb'};font-weight:600;">${v.video_type === 'shorts' ? '쇼츠' : '롱폼'}</span>
+            ${v.category_name ? `<span style="background:#f1f5f9;color:#475569;font-weight:600;border-radius:4px;padding:1px 6px;margin:0 2px;">${v.category_name}</span>` : ''}
             ${v.has_captions
               ? '<span style="color:#16a34a;font-weight:600;"> · CC 자막 있음</span>'
               : '<span style="color:#cbd5e1;"> · 자막 정보 없음</span>'}
@@ -778,8 +785,8 @@ function getYtFilterParams(prefix) {
   const minViews = document.getElementById(`${prefix}-min-views`).value;
   const sort = document.getElementById(`${prefix}-sort`).value;
   const captionsOnly = document.getElementById(`${prefix}-captions-only`).checked;
-  const excludeMusic = document.getElementById(`${prefix}-exclude-music`).checked;
-  return `&period=${period}&min_views=${minViews}&sort=${sort}&captions_only=${captionsOnly}&exclude_music=${excludeMusic}`;
+  const category = document.getElementById(`${prefix}-category`).value;
+  return `&period=${period}&min_views=${minViews}&sort=${sort}&captions_only=${captionsOnly}&category=${encodeURIComponent(category)}`;
 }
 
 function attachInfiniteScroll(container, onNearBottom) {
