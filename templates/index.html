@@ -142,24 +142,24 @@
     </div>
     <div class="yt-filter-bar">
       <select id="yt-period" onchange="searchYoutube()">
-        <option value="all">기간: 전체</option>
+        <option value="all">업로드 기간: 전체</option>
         <option value="24h">최근 1일</option>
         <option value="7d">최근 1주일</option>
         <option value="30d">최근 1개월</option>
         <option value="90d">최근 3개월</option>
       </select>
       <select id="yt-min-views" onchange="searchYoutube()">
-        <option value="0">조회수: 전체</option>
+        <option value="0">최소 조회수: 전체</option>
         <option value="10000">1만 이상</option>
         <option value="100000">10만 이상</option>
         <option value="1000000">100만 이상</option>
       </select>
       <select id="yt-sort" onchange="searchYoutube()">
-        <option value="views">조회수순</option>
-        <option value="recent">최신순</option>
+        <option value="views">정렬: 조회수순</option>
+        <option value="recent">정렬: 최신 업로드순</option>
       </select>
       <label class="yt-filter-check">
-        <input type="checkbox" id="yt-captions-only" onchange="searchYoutube()"> CC 자막만
+        <input type="checkbox" id="yt-captions-only" onchange="searchYoutube()"> 자막(CC) 보유만
       </label>
       <div class="yt-cat-dropdown">
         <button type="button" class="btn-secondary yt-cat-btn" onclick="toggleYtCatPanel('yt-cat-panel')">카테고리 ▾</button>
@@ -196,24 +196,24 @@
         <option value="long">롱폼</option>
       </select>
       <select id="yt-trending-period" onchange="reloadYtTrending()">
-        <option value="all">기간: 전체</option>
+        <option value="all">업로드 기간: 전체</option>
         <option value="24h">최근 1일</option>
         <option value="7d">최근 1주일</option>
         <option value="30d">최근 1개월</option>
         <option value="90d">최근 3개월</option>
       </select>
       <select id="yt-trending-min-views" onchange="reloadYtTrending()">
-        <option value="0">조회수: 전체</option>
+        <option value="0">최소 조회수: 전체</option>
         <option value="10000">1만 이상</option>
         <option value="100000">10만 이상</option>
         <option value="1000000">100만 이상</option>
       </select>
       <select id="yt-trending-sort" onchange="reloadYtTrending()">
-        <option value="views">조회수순</option>
-        <option value="recent">최신순</option>
+        <option value="views">정렬: 조회수순</option>
+        <option value="recent">정렬: 최신 업로드순</option>
       </select>
       <label class="yt-filter-check">
-        <input type="checkbox" id="yt-trending-captions-only" onchange="reloadYtTrending()"> CC 자막만
+        <input type="checkbox" id="yt-trending-captions-only" onchange="reloadYtTrending()"> 자막(CC) 보유만
       </label>
       <div class="yt-cat-dropdown">
         <button type="button" class="btn-secondary yt-cat-btn" onclick="toggleYtCatPanel('yt-trending-cat-panel')">카테고리 ▾</button>
