@@ -159,11 +159,18 @@
         <option value="recent">정렬: 최신 업로드순</option>
       </select>
       <label style="display:flex;align-items:center;gap:4px;cursor:pointer;color:#64748b;">
-        <input type="checkbox" id="yt-captions-only" onchange="searchYoutube()"> 자막(CC) 보유 영상만
+        <input type="checkbox" id="yt-captions-only" onchange="searchYoutube()"> 자막(CC) 보유만
       </label>
-      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;color:#64748b;">
-        <input type="checkbox" id="yt-exclude-music" checked onchange="searchYoutube()"> 음악/엔터 영상 제외
-      </label>
+      <div class="yt-cat-dropdown" style="position:relative;display:inline-block;">
+        <button type="button" class="btn-secondary" onclick="toggleYtCatPanel('yt-cat-panel')" style="font-size:0.82em;padding:6px 10px;">카테고리 제외 ▾</button>
+        <div id="yt-cat-panel" class="yt-cat-panel" style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:50;background:#fff;border:1px solid #d1d5db;border-radius:6px;padding:8px;box-shadow:0 6px 16px rgba(0,0,0,0.12);width:170px;max-height:230px;overflow-y:auto;">
+          {% for cid, cname in yt_categories.items() %}
+          <label style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer;font-size:0.8em;color:#475569;white-space:nowrap;">
+            <input type="checkbox" class="yt-cat-checkbox" value="{{ cid }}" {% if cid in yt_default_exclude_categories %}checked{% endif %} onchange="searchYoutube()"> {{ cname }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
     </div>
     <div id="yt-result-list" style="margin-top:10px;max-height:600px;overflow-y:auto;"></div>
     <div id="yt-loading-more" style="display:none;text-align:center;padding:10px;color:#94a3b8;font-size:0.82em;">더 불러오는 중...</div>
@@ -206,11 +213,18 @@
         <option value="recent">정렬: 최신 업로드순</option>
       </select>
       <label style="display:flex;align-items:center;gap:4px;cursor:pointer;color:#64748b;">
-        <input type="checkbox" id="yt-trending-captions-only" onchange="reloadYtTrending()"> 자막(CC) 보유 영상만
+        <input type="checkbox" id="yt-trending-captions-only" onchange="reloadYtTrending()"> 자막(CC) 보유만
       </label>
-      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;color:#64748b;">
-        <input type="checkbox" id="yt-trending-exclude-music" checked onchange="reloadYtTrending()"> 음악/엔터 영상 제외
-      </label>
+      <div class="yt-cat-dropdown" style="position:relative;display:inline-block;">
+        <button type="button" class="btn-secondary" onclick="toggleYtCatPanel('yt-trending-cat-panel')" style="font-size:0.82em;padding:6px 10px;">카테고리 제외 ▾</button>
+        <div id="yt-trending-cat-panel" class="yt-cat-panel" style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:50;background:#fff;border:1px solid #d1d5db;border-radius:6px;padding:8px;box-shadow:0 6px 16px rgba(0,0,0,0.12);width:170px;max-height:230px;overflow-y:auto;">
+          {% for cid, cname in yt_categories.items() %}
+          <label style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer;font-size:0.8em;color:#475569;white-space:nowrap;">
+            <input type="checkbox" class="yt-trending-cat-checkbox" value="{{ cid }}" {% if cid in yt_default_exclude_categories %}checked{% endif %} onchange="reloadYtTrending()"> {{ cname }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
     </div>
     <div id="yt-trending-panels" style="margin-top:0;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;display:none;">
       {% for region in ['한국','일본','중국','미국','영국','인도','베트남','동남아'] %}
@@ -758,6 +772,7 @@ function buildYtVideoCardsHtml(videos) {
           <div style="font-size:0.78em;color:#64748b;margin-top:3px;">
             👁 ${formatViewCount(v.view_count)} · ${v.channel} · ${v.duration_label} ·
             <span style="color:${v.video_type === 'shorts' ? '#db2777' : '#2563eb'};font-weight:600;">${v.video_type === 'shorts' ? '쇼츠' : '롱폼'}</span>
+            ${v.category_name ? `<span style="background:#f1f5f9;color:#64748b;border-radius:4px;padding:1px 6px;font-size:0.85em;margin:0 2px;">${v.category_name}</span>` : ''}
             ${v.has_captions
               ? '<span style="color:#16a34a;font-weight:600;"> · CC 자막 있음</span>'
               : '<span style="color:#cbd5e1;"> · 자막 정보 없음</span>'}
@@ -778,9 +793,23 @@ function getYtFilterParams(prefix) {
   const minViews = document.getElementById(`${prefix}-min-views`).value;
   const sort = document.getElementById(`${prefix}-sort`).value;
   const captionsOnly = document.getElementById(`${prefix}-captions-only`).checked;
-  const excludeMusic = document.getElementById(`${prefix}-exclude-music`).checked;
-  return `&period=${period}&min_views=${minViews}&sort=${sort}&captions_only=${captionsOnly}&exclude_music=${excludeMusic}`;
+  const catClass = prefix === 'yt-trending' ? 'yt-trending-cat-checkbox' : 'yt-cat-checkbox';
+  const excludeCategories = Array.from(document.querySelectorAll(`.${catClass}:checked`)).map(el => el.value).join(',');
+  return `&period=${period}&min_views=${minViews}&sort=${sort}&captions_only=${captionsOnly}&exclude_categories=${encodeURIComponent(excludeCategories)}`;
 }
+
+function toggleYtCatPanel(panelId) {
+  const panel = document.getElementById(panelId);
+  const isOpen = panel.style.display !== 'none';
+  document.querySelectorAll('.yt-cat-panel').forEach(p => p.style.display = 'none');
+  panel.style.display = isOpen ? 'none' : 'block';
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.yt-cat-dropdown')) {
+    document.querySelectorAll('.yt-cat-panel').forEach(p => p.style.display = 'none');
+  }
+});
 
 function attachInfiniteScroll(container, onNearBottom) {
   container.onscroll = () => {
