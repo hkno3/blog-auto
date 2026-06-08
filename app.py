@@ -33,14 +33,12 @@ def index():
     usage_list = get_gemini_usage(days=1)
     today_usage = usage_list[0] if usage_list else {"request_count": 0, "total_tokens": 0}
     writing_style = get_setting("writing_style") or "친근하고 정보성 있는 블로그 말투"
-    from modules.youtube_researcher import CATEGORY_NAMES
     return render_template("index.html", posts=posts, logs=logs, auth=auth, stats=stats,
                            gemini_today=today_usage,
                            writing_style=writing_style,
                            post_interval_minutes=get_setting("post_interval_minutes") or 60,
                            image_count=get_setting("image_count") or 5,
-                           min_content_length=get_setting("min_content_length") or 800,
-                           yt_categories=CATEGORY_NAMES)
+                           min_content_length=get_setting("min_content_length") or 800)
 
 
 @app.route("/api/gemini-usage")
@@ -224,7 +222,7 @@ def api_youtube_search():
     period = request.args.get("period", "all")
     min_views = int(request.args.get("min_views", 0) or 0)
     captions_only = request.args.get("captions_only", "false") == "true"
-    include_categories = set(filter(None, request.args.get("categories", "").split(",")))
+    exclude_music = request.args.get("exclude_music", "false") == "true"
     sort = request.args.get("sort", "views")
     page_token = request.args.get("page_token") or None
     if not keyword:
@@ -232,7 +230,7 @@ def api_youtube_search():
     try:
         from modules.youtube_researcher import search_videos
         result = search_videos(keyword, video_type=video_type, period=period, min_views=min_views,
-                               captions_only=captions_only, include_categories=include_categories, sort=sort,
+                               captions_only=captions_only, exclude_music=exclude_music, sort=sort,
                                page_token=page_token)
         return jsonify({"success": True, "videos": result["videos"], "next_page_token": result["next_page_token"]})
     except Exception as e:
@@ -255,11 +253,8 @@ def api_youtube_transcript():
 
 @app.route("/api/youtube/regions")
 def api_youtube_regions():
-    from modules.youtube_researcher import TRENDING_REGIONS, CATEGORY_NAMES
-    return jsonify({
-        "regions": list(TRENDING_REGIONS.keys()),
-        "categories": CATEGORY_NAMES,
-    })
+    from modules.youtube_researcher import TRENDING_REGIONS
+    return jsonify({"regions": list(TRENDING_REGIONS.keys())})
 
 
 @app.route("/api/youtube/trending")
@@ -269,7 +264,7 @@ def api_youtube_trending():
     period = request.args.get("period", "all")
     min_views = int(request.args.get("min_views", 0) or 0)
     captions_only = request.args.get("captions_only", "false") == "true"
-    include_categories = set(filter(None, request.args.get("categories", "").split(",")))
+    exclude_music = request.args.get("exclude_music", "false") == "true"
     sort = request.args.get("sort", "views")
     page_token = request.args.get("page_token") or None
     if not region:
@@ -277,7 +272,7 @@ def api_youtube_trending():
     try:
         from modules.youtube_researcher import get_trending_videos
         result = get_trending_videos(region, video_type=video_type, period=period, min_views=min_views,
-                                     captions_only=captions_only, include_categories=include_categories, sort=sort,
+                                     captions_only=captions_only, exclude_music=exclude_music, sort=sort,
                                      page_token=page_token)
         return jsonify({"success": True, "region": region, "videos": result["videos"],
                         "next_page_token": result["next_page_token"]})
