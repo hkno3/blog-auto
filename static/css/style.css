@@ -437,3 +437,65 @@ small { color: var(--text-muted); font-size: 12px; display: block; margin-top: 4
   .action-bar { flex-direction: column; }
   .input-with-btn { flex-direction: column; }
 }
+
+/* 유튜브 리서치 필터 바 - 한 줄 컴팩트 */
+.yt-filter-bar {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  gap: 6px;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 0.78em;
+}
+.yt-filter-bar select {
+  padding: 4px 6px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 1em;
+  flex-shrink: 0;
+}
+.yt-filter-check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  color: #64748b;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.yt-cat-dropdown {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.yt-cat-btn {
+  font-size: 1em;
+  padding: 5px 10px;
+  white-space: nowrap;
+}
+.yt-cat-panel {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 50;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 8px;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+  width: 190px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.yt-cat-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 2px;
+  cursor: pointer;
+  font-size: 0.95em;
+  color: #334155;
+  white-space: nowrap;
+}
