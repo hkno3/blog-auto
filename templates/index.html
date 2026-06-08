@@ -140,28 +140,28 @@
       </select>
       <button class="btn-secondary" onclick="searchYoutube()" style="flex-shrink:0;">검색</button>
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;font-size:0.82em;">
-      <select id="yt-period" onchange="searchYoutube()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;">
+    <div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:8px;font-size:0.74em;">
+      <select id="yt-period" onchange="searchYoutube()" style="padding:3px 5px;border:1px solid #d1d5db;border-radius:5px;font-size:1em;">
         <option value="all">업로드 기간: 전체</option>
         <option value="24h">최근 1일</option>
         <option value="7d">최근 1주일</option>
         <option value="30d">최근 1개월</option>
         <option value="90d">최근 3개월</option>
       </select>
-      <select id="yt-min-views" onchange="searchYoutube()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;">
+      <select id="yt-min-views" onchange="searchYoutube()" style="padding:3px 5px;border:1px solid #d1d5db;border-radius:5px;font-size:1em;">
         <option value="0">최소 조회수: 전체</option>
         <option value="10000">1만 이상</option>
         <option value="100000">10만 이상</option>
         <option value="1000000">100만 이상</option>
       </select>
-      <select id="yt-sort" onchange="searchYoutube()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;">
+      <select id="yt-sort" onchange="searchYoutube()" style="padding:3px 5px;border:1px solid #d1d5db;border-radius:5px;font-size:1em;">
         <option value="views">정렬: 조회수순</option>
         <option value="recent">정렬: 최신 업로드순</option>
       </select>
-      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;color:#64748b;">
+      <label style="display:flex;align-items:center;gap:3px;cursor:pointer;color:#64748b;white-space:nowrap;">
         <input type="checkbox" id="yt-captions-only" onchange="searchYoutube()"> 자막(CC) 보유 영상만
       </label>
-      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;color:#64748b;">
+      <label style="display:flex;align-items:center;gap:3px;cursor:pointer;color:#64748b;white-space:nowrap;">
         <input type="checkbox" id="yt-exclude-music" checked onchange="searchYoutube()"> 음악/엔터 영상 제외
       </label>
     </div>
@@ -182,33 +182,33 @@
         <button class="btn-secondary" onclick="reloadYtTrending()" style="font-size:0.8em;padding:6px 10px;">새로고침</button>
       </div>
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0;font-size:0.82em;">
-      <select id="yt-trending-type" onchange="reloadYtTrending()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;">
+    <div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin:8px 0;font-size:0.74em;">
+      <select id="yt-trending-type" onchange="reloadYtTrending()" style="padding:3px 5px;border:1px solid #d1d5db;border-radius:5px;font-size:1em;">
         <option value="all">전체</option>
         <option value="shorts">쇼츠</option>
         <option value="long">롱폼</option>
       </select>
-      <select id="yt-trending-period" onchange="reloadYtTrending()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;">
+      <select id="yt-trending-period" onchange="reloadYtTrending()" style="padding:3px 5px;border:1px solid #d1d5db;border-radius:5px;font-size:1em;">
         <option value="all">업로드 기간: 전체</option>
         <option value="24h">최근 1일</option>
         <option value="7d">최근 1주일</option>
         <option value="30d">최근 1개월</option>
         <option value="90d">최근 3개월</option>
       </select>
-      <select id="yt-trending-min-views" onchange="reloadYtTrending()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;">
+      <select id="yt-trending-min-views" onchange="reloadYtTrending()" style="padding:3px 5px;border:1px solid #d1d5db;border-radius:5px;font-size:1em;">
         <option value="0">최소 조회수: 전체</option>
         <option value="10000">1만 이상</option>
         <option value="100000">10만 이상</option>
         <option value="1000000">100만 이상</option>
       </select>
-      <select id="yt-trending-sort" onchange="reloadYtTrending()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;">
+      <select id="yt-trending-sort" onchange="reloadYtTrending()" style="padding:3px 5px;border:1px solid #d1d5db;border-radius:5px;font-size:1em;">
         <option value="views">정렬: 조회수순</option>
         <option value="recent">정렬: 최신 업로드순</option>
       </select>
-      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;color:#64748b;">
+      <label style="display:flex;align-items:center;gap:3px;cursor:pointer;color:#64748b;white-space:nowrap;">
         <input type="checkbox" id="yt-trending-captions-only" onchange="reloadYtTrending()"> 자막(CC) 보유 영상만
       </label>
-      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;color:#64748b;">
+      <label style="display:flex;align-items:center;gap:3px;cursor:pointer;color:#64748b;white-space:nowrap;">
         <input type="checkbox" id="yt-trending-exclude-music" checked onchange="reloadYtTrending()"> 음악/엔터 영상 제외
       </label>
     </div>
